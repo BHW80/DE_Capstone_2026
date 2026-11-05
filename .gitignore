@@ -1,0 +1,30 @@
+# Data files (keep raw and processed data out of git)
+data/
+*.csv
+*.parquet
+*.json
+!docker/**
+!dags/**
+
+# Python environment & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv/
+venv/
+ENV/
+.pytest_cache/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Airflow & Logs
+logs/
+*.log
+airflow.cfg
+airflow.db
