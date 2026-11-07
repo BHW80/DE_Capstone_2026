@@ -20,6 +20,19 @@ TOPIC_ERR = "topic_err"
 SAMPLE_CSV_PATH = Path(__file__).resolve().parent.parent / "data" / "sample" / "us_videos_mini_500.csv"
 ERROR_RATE = 0.10  # 10% künstliche Fehler
 
+# SCD-2 Simulations-Konfiguration (Demonstriert Metadaten-Evolution im Stream)
+SCD2_TARGET_VIDEO_ID = "2kyS6SvSYSE"
+SCD2_MUTATIONS = {
+    2: {
+        "title": "WE WANT TO TALK ABOUT OUR MARRIAGE (Official Update)",
+        "tags": "marriage|relationship|update|vlog",
+    },
+    3: {
+        "title": "WE WANT TO TALK ABOUT OUR MARRIAGE [THE TRUTH]",
+        "tags": "marriage|relationship|update|vlog|truth",
+    },
+}
+
 
 def create_producer():
     logger.info(f"Verbinde zu Kafka Broker unter {BOOTSTRAP_SERVER}...")
@@ -40,14 +53,30 @@ def run_producer():
     total_sent = 0
     clean_sent = 0
     err_sent = 0
+    scd2_events_count = 0
+    video_occurrences = {}
 
     with open(SAMPLE_CSV_PATH, mode="r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
             total_sent += 1
+            vid = row.get("video_id", "")
+            video_occurrences[vid] = video_occurrences.get(vid, 0) + 1
+            occ = video_occurrences[vid]
 
-            # Fault Injection: 10% Chance auf fehlerhaften Datensatz
-            if random.random() < ERROR_RATE:
+            # SCD-2 Mutation: Metadaten-Änderung für das Ziel-Video bei späteren Auftritten
+            if vid == SCD2_TARGET_VIDEO_ID and occ in SCD2_MUTATIONS:
+                mutation = SCD2_MUTATIONS[occ]
+                row["title"] = mutation["title"]
+                row["tags"] = mutation["tags"]
+                scd2_events_count += 1
+                logger.info(
+                    f"[{total_sent}] 🔄 SCD-2 EVENT INJECTED: Video '{vid}' (Occurrence #{occ}) "
+                    f"-> New Title: '{row['title']}'"
+                )
+
+            # Fault Injection: 10% Chance auf fehlerhaften Datensatz (ausgenommen das SCD-2 Demovideo)
+            if vid != SCD2_TARGET_VIDEO_ID and random.random() < ERROR_RATE:
                 # Absichtlicher Fehler: Views als ungültiger Text und Kennzeichnung
                 corrupted_row = dict(row)
                 corrupted_row["views"] = "CORRUPT_INVALID_NUMBER"
@@ -68,9 +97,12 @@ def run_producer():
     producer.flush()
     producer.close()
 
-    logger.info("=" * 50)
-    logger.info(f"Streaming abgeschlossen! Gesamt: {total_sent} | Clean: {clean_sent} | DLQ/Fehler: {err_sent}")
-    logger.info("=" * 50)
+    logger.info("=" * 60)
+    logger.info(
+        f"Streaming abgeschlossen! Gesamt: {total_sent} | Clean: {clean_sent} "
+        f"| DLQ/Fehler: {err_sent} | SCD-2 Mutationen: {scd2_events_count}"
+    )
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":
