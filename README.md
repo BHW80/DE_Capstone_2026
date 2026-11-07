@@ -209,7 +209,7 @@ pip install -r requirements.txt
 ### Schritt 2: Kafka Streaming starten & Daten einspeisen
 ```powershell
 # 1. Kafka Broker & Kafka-UI im Hintergrund starten
-docker compose -f docker/docker-compose-kafka.yml up -d
+.\start_kafka.ps1
 
 # 2. Producer starten (erzeugt Events, DLQ-Fehler und SCD-2 Mutationen)
 .\run_producer.ps1
@@ -302,6 +302,8 @@ DE_Capstone_2026/
 ├── run_gold.ps1                          # Runner: PySpark Gold Aggregation
 ├── run_dbt.ps1                           # Runner: dbt CLI Steuerung (debug, run, snapshot, test)
 ├── load_to_bigquery.ps1                  # Runner: Google BigQuery Cloud Release
+├── start_kafka.ps1                       # Runner: Start Apache Kafka & Kafka-UI
+├── stop_kafka.ps1                        # Runner: Stopp Apache Kafka & Kafka-UI
 ├── start_airflow.ps1                     # Runner: Start Airflow & PostgreSQL
 ├── stop_airflow.ps1                      # Runner: Stopp Airflow
 ├── start_monitoring.ps1                  # Runner: Start Prometheus & Grafana
