@@ -10,10 +10,15 @@ logger = logging.getLogger("SilverTransformation")
 def create_spark_session():
     return (
         SparkSession.builder
-        .appName("DE_Capstone_Silver_Transform")
+        .appName("DE_Capstone_Silver_Iceberg")
         .master("local[*]")
         .config("spark.driver.memory", "2g")
         .config("spark.sql.parquet.compression.codec", "snappy")
+        # Apache Iceberg Extensions & Catalog Konfiguration
+        .config("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions")
+        .config("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog")
+        .config("spark.sql.catalog.local.type", "hadoop")
+        .config("spark.sql.catalog.local.warehouse", "/app/data/iceberg_warehouse")
         .getOrCreate()
     )
 
@@ -76,8 +81,18 @@ def run_silver_transformation():
         .na.fill({"category_name": "Unknown"})
     )
 
-    # 3. Speichern im Silver Layer (overwrite fuer idempotente Batch-Jobs)
-    logger.info(f"Schreibe Silver Parquet nach: {silver_output}")
+    # 3. Speichern im Silver Layer (Dual-Write: Apache Iceberg Table + Parquet Snapshot)
+    iceberg_table = "local.silver.videos"
+    logger.info(f"Schreibe Silver-Daten in Apache Iceberg Tabelle: '{iceberg_table}'...")
+    df_silver.writeTo(iceberg_table).createOrReplace()
+
+    # Iceberg Metadaten & Snapshot-Historie ausgeben
+    logger.info("Lese Iceberg Snapshot-Historie...")
+    history_df = spark.read.table(f"{iceberg_table}.history")
+    history_df.show(truncate=False)
+
+    # Zusaetzlich klassisches Parquet fuer Downstream-Tools bereitstellen
+    logger.info(f"Schreibe zusaetzlich Parquet nach: {silver_output}")
     (
         df_silver
         .write
@@ -86,7 +101,7 @@ def run_silver_transformation():
     )
 
     logger.info("=" * 60)
-    logger.info(f"SILVER-TRANSFORMATION ERFOLGREICH! {initial_count} Datensätze verarbeitet.")
+    logger.info(f"SILVER-TRANSFORMATION (ICEBERG) ERFOLGREICH! {initial_count} Datensätze verarbeitet.")
     logger.info("=" * 60)
 
     spark.stop()

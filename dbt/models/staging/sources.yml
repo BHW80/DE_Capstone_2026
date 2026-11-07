@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: youtube_raw
+    database: cloudanalytics-514018
+    schema: youtube_analytics
+    tables:
+      - name: silver_videos
+        description: "Bereinigte und typisierte YouTube-Events aus dem Silver-Layer."

@@ -34,3 +34,10 @@ logs/
 airflow.cfg
 airflow.db
 java_opts.txt
+
+# dbt artifacts & local files
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+

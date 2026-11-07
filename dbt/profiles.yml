@@ -1,0 +1,12 @@
+youtube_lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: cloudanalytics-514018
+      dataset: youtube_analytics
+      keyfile: gcp_service_account.json
+      threads: 4
+      timeout_seconds: 300
+      location: EU

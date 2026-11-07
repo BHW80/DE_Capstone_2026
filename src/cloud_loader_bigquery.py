@@ -13,6 +13,7 @@ LOCATION = "EU"  # Europaeische Region (GCP Always Free Tier kompatibel)
 ROOT_DIR = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT_DIR / "gcp_service_account.json"
 DATA_GOLD_DIR = ROOT_DIR / "data" / "gold"
+DATA_SILVER_DIR = ROOT_DIR / "data" / "silver"
 
 
 def get_bigquery_client():
@@ -68,6 +69,33 @@ def load_parquet_table(client, table_name, folder_name):
     logger.info(f"ERFOLG: Tabelle '{table_name}' hat jetzt {table.num_rows} Zeilen in BigQuery!")
 
 
+def load_silver_table(client):
+    """Laedt die bereinigten Silver-Events als dbt-Quelltabelle nach BigQuery."""
+    parquet_files = [f for f in DATA_SILVER_DIR.glob("*.parquet") if not f.name.startswith(".")]
+
+    if not parquet_files:
+        logger.error(f"Keine Silver Parquet-Dateien gefunden in: {DATA_SILVER_DIR}")
+        return
+
+    file_to_load = parquet_files[0]
+    table_ref = f"{PROJECT_ID}.{DATASET_ID}.silver_videos"
+
+    logger.info(f"Lade Silver-Events '{file_to_load.name}' ({file_to_load.stat().st_size / 1024:.1f} KB) in '{table_ref}'...")
+
+    job_config = bigquery.LoadJobConfig(
+        source_format=bigquery.SourceFormat.PARQUET,
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+    )
+
+    with open(file_to_load, "rb") as f:
+        load_job = client.load_table_from_file(f, table_ref, job_config=job_config)
+
+    load_job.result()
+
+    table = client.get_table(table_ref)
+    logger.info(f"ERFOLG: Quelltabelle 'silver_videos' hat jetzt {table.num_rows} Zeilen in BigQuery!")
+
+
 def run_cloud_load():
     logger.info("=" * 60)
     logger.info(f"Starte BigQuery Cloud Ingestion fuer Projekt: {PROJECT_ID}")
@@ -76,10 +104,13 @@ def run_cloud_load():
     client = get_bigquery_client()
     ensure_dataset(client)
 
-    # Mart 1: Category KPIs
+    # 1. dbt Quelltabelle: Silver Events
+    load_silver_table(client)
+
+    # 2. Mart 1: Category KPIs
     load_parquet_table(client, "gold_category_kpis", "category_kpis")
 
-    # Mart 2: Top-5 Trending Videos
+    # 3. Mart 2: Top-5 Trending Videos
     load_parquet_table(client, "gold_top_trending_videos", "top_trending_videos")
 
     logger.info("=" * 60)
