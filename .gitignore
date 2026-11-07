@@ -23,8 +23,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Airflow & Logs
+# Airflow, Spark & Logs
 logs/
 *.log
 airflow.cfg
 airflow.db
+java_opts.txt

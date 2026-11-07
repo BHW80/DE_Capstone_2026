@@ -1,0 +1,10 @@
+version: '3.8'
+
+services:
+  spark:
+    image: apache/spark-py:latest
+    container_name: de_spark
+    user: root
+    volumes:
+      - ..:/app
+    working_dir: /app
