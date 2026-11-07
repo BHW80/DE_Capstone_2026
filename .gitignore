@@ -2,7 +2,12 @@
 data/
 *.csv
 *.parquet
+# Cloud Credentials & Service Accounts
+*service_account*.json
+*credentials*.json
+gcp_key.json
 *.json
+!data/raw/US_category_id.json
 !docker/**
 !dags/**
 
