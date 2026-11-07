@@ -1,0 +1,6 @@
+# Kafka Client (Modern, pure-Python fork)
+kafka-python-ng>=2.2.2
+
+# Data Handling & Parquet
+pandas>=2.0.0
+pyarrow>=14.0.0
