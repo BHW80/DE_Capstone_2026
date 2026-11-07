@@ -212,11 +212,11 @@ pip install -r requirements.txt
 docker compose -f docker/docker-compose-kafka.yml up -d
 
 # 2. Producer starten (erzeugt Events, DLQ-Fehler und SCD-2 Mutationen)
-python src/producer.py
+.\run_producer.ps1
 
 # 3. Consumers ausführen (Bronze Ingest & Dead Letter Queue)
-python src/consumer_bronze.py
-python src/consumer_dlq.py
+.\run_bronze.ps1
+.\run_dlq.ps1
 ```
 * **Kafka-UI:** [http://localhost:8080](http://localhost:8080)
 
@@ -295,7 +295,9 @@ DE_Capstone_2026/
 │   ├── transform_silver.py               # PySpark Silver-Transformation mit Apache Iceberg V2
 │   ├── transform_gold.py                 # PySpark Gold Aggregationen & Window Functions
 │   └── cloud_loader_bigquery.py          # BigQuery Idempotenter Parquet & Silver Uploader
+├── run_producer.ps1                      # Runner: Streaming Producer (Fault Injection + SCD-2)
 ├── run_bronze.ps1                        # Runner: Bronze Kafka Ingestion
+├── run_dlq.ps1                           # Runner: Dead Letter Queue (DLQ) Consumer
 ├── run_silver.ps1                        # Runner: PySpark Apache Iceberg Job
 ├── run_gold.ps1                          # Runner: PySpark Gold Aggregation
 ├── run_dbt.ps1                           # Runner: dbt CLI Steuerung (debug, run, snapshot, test)
