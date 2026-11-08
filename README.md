@@ -15,6 +15,9 @@ Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattf
 
 Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 via dbt)**, **serverloser GCP-Orchestrierung via Terraform & Cloud Workflows** sowie **Cloud-Observability via Grafana Cloud**.
 
+> 📘 **Vollständiges Architektur-Handbuch & Repertorium (PDF):**  
+> Die tiefgehende 20+-seitige Enterprise-Dokumentation inkl. ADRs, Code-Deep-Dives, Release-Matrix, Runbooks und Interview-Masterclass liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
+
 ---
 
 ## 📦 Versions-Historie & Evolutionsstufen
@@ -95,7 +98,7 @@ Die folgende Matrix definiert für jede Release-Stufe exakt, welche Tools, Conta
 ```mermaid
 flowchart TD
     subgraph Streaming ["1. Streaming Ingestion & Resilienz"]
-        RAW["data/raw/USvideos.csv"] --> PROD["src/producer.py\n(10% DLQ Injection + SCD-2 Mutation)"]
+        RAW["data/sample/us_videos_mini_500.csv"] --> PROD["src/producer.py\n(10% DLQ Injection + SCD-2 Mutation)"]
         PROD -->|Clean Events| KAFKA["Kafka Broker :9092\n(topic_ingest)"]
         PROD -->|Corrupt Events| DLQ["Kafka Broker :9092\n(topic_err)"]
         KAFKA --> BRONZE_C["src/consumer_bronze.py"]
@@ -420,6 +423,8 @@ DE_Capstone_2026/
 │   └── release.yml                       # 🟢 [v2.1 Active] Automatisierte Release-Erstellung bei Tag-Push
 ├── dashboards/                           # 🟢 [v2.1 Active] ⭐ Observability-as-Code
 │   └── youtube_dataops_monitoring.json   # 🟢 [v2.1 Active] Grafana Cloud Dashboard für Workflows & BigQuery
+├── docs/                                 # 🟢 [v2.1 Active] ⭐ Enterprise Dokumentation & Handbuch
+│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.1 Active] 20+ Seiten Architektur-Repertorium
 ├── dags/                                 # 🟡 [v1.0 Legacy] Apache Airflow DAGs (in v2.1 durch Cloud Workflows abgelöst)
 │   ├── de_capstone_pipeline.py           # 🟡 [v1.0 Legacy] Lokale Airflow Pipeline (Bronze -> Silver -> Gold)
 │   └── de_cloud_release_pipeline.py      # 🟡 [v1.0 Legacy] Alter BigQuery Parquet Sync
@@ -458,7 +463,8 @@ DE_Capstone_2026/
 │   ├── transform_silver.py               # 🟢 [v2.0 Active] PySpark Job mit Apache Iceberg V2 Commit
 │   ├── transform_gold.py                 # 🟡 [v1.0 Legacy] Altes Spark-Gold Skript (abgelöst durch dbt Marts)
 │   ├── cloud_loader_bigquery.py          # 🟢 [v2.0 Active] BigQuery Idempotenter Parquet & Silver Uploader
-│   └── cloud_workflow_runner.py          # 🟢 [v2.1 Active] REST-Client für Google Cloud Workflows Ausführung
+│   ├── cloud_workflow_runner.py          # 🟢 [v2.1 Active] REST-Client für Google Cloud Workflows Ausführung
+│   └── generate_repertorium_pdf.py       # 🟢 [v2.1 Active] ReportLab Generator für das PDF-Architektur-Repertorium
 ├── run_producer.ps1                      # 🟢 [v2.0 Active] Runner: Streaming Producer (Fault Injection + SCD-2)
 ├── run_bronze.ps1                        # 🟢 [v2.0 Active] Runner: Bronze Kafka Ingestion
 ├── run_dlq.ps1                           # 🟢 [v2.0 Active] Runner: Dead Letter Queue (DLQ) Consumer
