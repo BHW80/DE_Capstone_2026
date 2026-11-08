@@ -21,3 +21,9 @@ variable "credentials_file" {
   type        = string
   default     = "../gcp_service_account.json"
 }
+
+variable "service_account_email" {
+  description = "E-Mail des ausführenden GCP Service Accounts"
+  type        = string
+  default     = "cloudanalytics-514018@cloudanalytics-514018.iam.gserviceaccount.com"
+}

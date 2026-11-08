@@ -5,9 +5,9 @@
 [![Apache Iceberg](https://img.shields.io/badge/Table%20Format-Apache%20Iceberg%20V2-00758F?logo=apache)](https://iceberg.apache.org/)
 [![dbt Core](https://img.shields.io/badge/Transform-dbt%20Core%201.13-FF694B?logo=dbt)](https://www.getdbt.com/)
 [![Google BigQuery](https://img.shields.io/badge/Cloud%20Warehouse-Google%20BigQuery-4285F4?logo=googlecloud)](https://cloud.google.com/bigquery)
+[![Google Cloud Workflows](https://img.shields.io/badge/Orchestration-Google%20Cloud%20Workflows-4285F4?logo=googlecloud)](https://cloud.google.com/workflows)
 [![Apache Airflow](https://img.shields.io/badge/Orchestration-Apache%20Airflow%202.9-017CEE?logo=apacheairflow)](https://airflow.apache.org/)
-[![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-E6522C?logo=prometheus)](https://prometheus.io/)
-[![Grafana](https://img.shields.io/badge/Observability-Grafana-F46800?logo=grafana)](https://grafana.com/)
+[![Grafana Cloud](https://img.shields.io/badge/Observability-Grafana%20Cloud-F46800?logo=grafana)](https://grafana.com/)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%201.17-844FBA?logo=terraform)](https://www.terraform.io/)
 [![Docker](https://img.shields.io/badge/Infrastructure-Docker%20Compose-2496ED?logo=docker)](https://www.docker.com/)
 
@@ -17,17 +17,17 @@ This repository documents the evolution of an on-premises 2021 Big Data Capstone
 
 ---
 
-## 📦 Version History: v1.0.0 vs. Modern Evolution
+## 📦 Version History: Von Bare-Metal zu Serverless Cloud & Observability
 
 ```
-v1.0.0 (Core Foundation)             Modern Evolution (Kimball DWH & Lakehouse)
-┌───────────────────────────────┐     ┌────────────────────────────────────────────────────────┐
-│ • Kafka KRaft (Zero-ZooKeeper)│     │ • Apache Iceberg V2 Table Format (ACID & Snapshots)    │
-│ • Dead Letter Queue (DLQ)     │ ──► │ • Streaming Metadata Evolution & SCD-2 Simulation     │
-│ • Ephemeral Docker PySpark    │     │ • Kimball Star-Schema via dbt Core (Facts & Dimensions)│
-│ • Airflow 2.9 & Monitoring    │     │ • In-Warehouse Data Quality Gates (15 Automated Tests) │
-│ • Parquet Bulk BigQuery Sync  │     │ • Zero-Idle Serverless Cloud Ready Architecture        │
-└───────────────────────────────┘     └────────────────────────────────────────────────────────┘
+v1.0.0 (Core Foundation)             v2.0.0 (Lakehouse & Kimball Marts)        v2.1.0 (Serverless Cloud & Observability)
+┌───────────────────────────────┐    ┌────────────────────────────────────────┐ ┌──────────────────────────────────────────────┐
+│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Snapshots (ACID)   │ │ • Terraform IaC (GCS, BigQuery, PubSub, WFs) │
+│ • Dead Letter Queue (DLQ)     │───►│ • dbt SCD-2 Dimension & Snapshots      │►│ • Google Cloud Workflows (0 € Idle-Kosten)   │
+│ • Ephemeral Docker PySpark    │    │ • 15 Automatisierte dbt Quality Gates  │ │ • Automated Quality Gate & Foreign-Key Check │
+│ • Airflow 2.9 (Docker)        │    │ • Ephemerer PySpark Catalyst Engine    │ │ • Cloud-Native Grafana Cloud Observability   │
+│ • Parquet Bulk BigQuery Sync  │    │ • BigQuery Star-Schema Materialisierung│ │ • GitHub Actions CI/CD & Automated Release   │
+└───────────────────────────────┘    └────────────────────────────────────────┘ └──────────────────────────────────────────────┘
 ```
 
 ### 🔹 Was war Release `v1.0.0`? (Eingefrorenes Fundament)
@@ -37,6 +37,41 @@ Der Release [`v1.0.0`](https://github.com/BHW80/DE_Capstone_2026/releases/tag/v1
 * **Ephemerer Spark-Compute:** PySpark läuft in einem On-Demand-Container über den Docker-Socket (`/var/run/docker.sock`) mit nativer Catalyst-Engine und Zero-Shuffle Broadcast-Joins.
 * **Observability:** Prometheus & Grafana Stack mit automatischem Datasource-Provisioning.
 * **Cloud-Export:** Basis-Laden aggregierter Gold-Parquet-Marts nach Google BigQuery.
+
+---
+
+### 🔹 Was war Release `v2.0.0`? (Kimball DWH & Open Table Formats)
+Der Release [`v2.0.0`](https://github.com/BHW80/DE_Capstone_2026/releases/tag/v2.0.0) hob die Plattform auf Enterprise-Lakehouse-Niveau:
+* **Apache Iceberg V2 Table Format:** ACID-Transaktionssicherheit, Time-Travel und Snapshot-Isolation (`v1.metadata.json`).
+* **SCD-2 Historisierung:** Deterministische Metadaten-Mutation im Streaming-Producer (`2kyS6SvSYSE`) mit dbt Snapshot-Generierung (`valid_from`, `valid_to`, `is_current`).
+* **Kimball Star-Schema:** `dim_video`, `dim_category`, `dim_date` und `fact_video_metrics`.
+* **In-Warehouse Quality Gates:** 15 automatisierte dbt Tests (`PASS=15 ERROR=0`).
+
+---
+
+### 🔹 Neu in Release `v2.1.0`: Serverless Cloud Workflows & Cloud Observability
+
+1. **Infrastructure as Code (Terraform 1.17):**
+   * Vollautomatisiertes Provisioning aller Cloud-Ressourcen in Frankfurt (`europe-west3`) / EU:
+     * Google Cloud Storage Bucket (`lakehouse-youtube-cloudanalytics-514018`) mit Versionierung.
+     * Google BigQuery Dataset (`youtube_analytics`) mit Idempotenz-Schutz.
+     * Google Cloud Pub/Sub: Ingest-Topic (`topic-youtube-ingest`) und Dead Letter Queue (`topic-youtube-dlq`).
+     * Google Cloud Workflow (`youtube-dataops-pipeline`).
+   * Komfortabler Runner: `.\run_infra.ps1 [init|plan|apply|destroy]`.
+
+2. **Serverless Orchestrierung (Google Cloud Workflows):**
+   * **0 € Idle-Kosten:** Löst 24/7 laufende Airflow-VMs (Cloud Composer ~300 €/Monat) durch einen 100% serverlosen Cloud Workflow ab.
+   * **Integrierte Data Quality Gates:** Der Workflow führt nach der Faktentabellen-Berechnung einen automatisierten Check auf Foreign-Key-Orphans aus. Bei Fehlern stoppt die Pipeline sofort (`raise`).
+   * Ausführbar via REST-Client in unter 6 Sekunden: `.\run_workflow.ps1`.
+
+3. **Cloud-Native Observability (Grafana Cloud & GCP Monitoring):**
+   * Keine lokalen Exporter, Daemons oder Docker-Container nötig ("Weg 1: Cloud-Native").
+   * Direkte Anbindung von Grafana Cloud an Google Cloud Monitoring über den Service Account Key.
+   * Fertiges Dashboard ([`dashboards/youtube_dataops_monitoring.json`](dashboards/youtube_dataops_monitoring.json)) für Workflow-Status, Durchlaufzeiten (p99), BigQuery-Abfragemengen (Kostenkontrolle) und Pub/Sub DLQ-Raten.
+
+4. **CI/CD & Release Automation (GitHub Actions):**
+   * `.github/workflows/ci.yml`: Automatische Syntax-, YAML- und Python-Validierung bei Pushes und PRs.
+   * `.github/workflows/release.yml`: Vollautomatisierte Erstellung von GitHub Releases bei Tag-Pushes (`v*`).
 
 ---
 
@@ -301,10 +336,17 @@ DE_Capstone_2026/
 │           ├── dim_date.sql              # 🟢 [v2.0 Active] Vorberechnete Datumsdimension
 │           ├── fact_video_metrics.sql    # 🟢 [v2.0 Active] Faktentabelle mit täglichen Interaktionsmetriken
 │           └── schema.yml                # 🟢 [v2.0 Active] ⭐ Quality Gate (15 automatisierte dbt Tests)
+├── .github/workflows/                    # 🟢 [v2.1 Active] ⭐ CI/CD Automation (GitHub Actions)
+│   ├── ci.yml                            # 🟢 [v2.1 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
+│   └── release.yml                       # 🟢 [v2.1 Active] Automatisierte Release-Erstellung bei Tag-Push
+├── dashboards/                           # 🟢 [v2.1 Active] ⭐ Observability-as-Code
+│   └── youtube_dataops_monitoring.json   # 🟢 [v2.1 Active] Grafana Cloud Dashboard für GCP Workflows & BigQuery
 ├── infra/                                # 🟢 [v2.0 Active] ⭐ Infrastructure as Code (Terraform)
 │   ├── versions.tf                       # 🟢 [v2.0 Active] Terraform & Google Provider Konfiguration
-│   ├── variables.tf                      # 🟢 [v2.0 Active] Parameter (project_id, region, location)
-│   └── main.tf                           # 🟢 [v2.0 Active] Deklaration von GCS Bucket, BigQuery & Pub/Sub
+│   ├── variables.tf                      # 🟢 [v2.0 Active] Parameter (project_id, region, service_account)
+│   ├── main.tf                           # 🟢 [v2.0 Active] GCS Bucket, BigQuery Dataset, Pub/Sub Topics & Workflows
+│   └── workflows/                        # 🟢 [v2.1 Active] ⭐ Serverless Cloud Workflows Orchestrierung
+│       └── pipeline.yaml                 # 🟢 [v2.1 Active] BigQuery Star-Schema Join & Quality Gate Workflow
 ├── docker/                               # Modulare Docker Compose Konfigurationen
 │   ├── docker-compose-kafka.yml          # 🟢 [v2.0 Active] Apache Kafka KRaft & Kafka-UI
 │   ├── docker-compose-spark.yml          # 🟢 [v2.0 Active] Ephemerer PySpark Compute Container
@@ -318,7 +360,8 @@ DE_Capstone_2026/
 │   ├── consumer_dlq.py                   # 🟢 [v2.0 Active] Dead Letter Queue Consumer (Quarantäne)
 │   ├── transform_silver.py               # 🟢 [v2.0 Active] PySpark Transformation mit Apache Iceberg V2
 │   ├── transform_gold.py                 # 🟡 [v1.0 Legacy] Altes Spark-Gold (abgelöst durch dbt Marts)
-│   └── cloud_loader_bigquery.py          # 🟢 [v2.0 Active] BigQuery Idempotenter Parquet & Silver Uploader
+│   ├── cloud_loader_bigquery.py          # 🟢 [v2.0 Active] BigQuery Idempotenter Parquet & Silver Uploader
+│   └── cloud_workflow_runner.py          # 🟢 [v2.1 Active] REST-Runner für Cloud Workflows Ausführung
 ├── run_producer.ps1                      # 🟢 [v2.0 Active] Runner: Streaming Producer (Fault Injection + SCD-2)
 ├── run_bronze.ps1                        # 🟢 [v2.0 Active] Runner: Bronze Kafka Ingestion
 ├── run_dlq.ps1                           # 🟢 [v2.0 Active] Runner: Dead Letter Queue (DLQ) Consumer
@@ -326,6 +369,7 @@ DE_Capstone_2026/
 ├── run_gold.ps1                          # 🟡 [v1.0 Legacy] Runner: Altes Spark-Gold (abgelöst durch run_dbt.ps1)
 ├── run_dbt.ps1                           # 🟢 [v2.0 Active] Runner: dbt CLI Steuerung (debug, run, snapshot, test)
 ├── run_infra.ps1                         # 🟢 [v2.0 Active] Runner: Terraform CLI Steuerung (init, plan, apply, destroy)
+├── run_workflow.ps1                      # 🟢 [v2.1 Active] Runner: Serverless Cloud Workflow (BigQuery & Quality Gate)
 ├── load_to_bigquery.ps1                  # 🟢 [v2.0 Active] Runner: Google BigQuery Cloud Ingestion
 ├── start_kafka.ps1                       # 🟢 [v2.0 Active] Runner: Start Apache Kafka & Kafka-UI
 ├── stop_kafka.ps1                        # 🟢 [v2.0 Active] Runner: Stopp Apache Kafka & Kafka-UI

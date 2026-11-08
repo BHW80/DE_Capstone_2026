@@ -34,3 +34,12 @@ resource "google_pubsub_topic" "youtube_ingest" {
 resource "google_pubsub_topic" "youtube_dlq" {
   name = "topic-youtube-dlq"
 }
+
+# 5. Der Serverless Cloud Workflow (Nutzt den existierenden Service Account)
+resource "google_workflows_workflow" "youtube_dataops_pipeline" {
+  name            = "youtube-dataops-pipeline"
+  region          = var.region
+  description     = "Serverlose Orchestrierung für YouTube DWH Star-Schema & Quality Gates"
+  service_account = var.service_account_email
+  source_contents = file("${path.module}/workflows/pipeline.yaml")
+}

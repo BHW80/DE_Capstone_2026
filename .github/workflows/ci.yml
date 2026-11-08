@@ -1,0 +1,43 @@
+name: DataOps CI & Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-pipeline:
+    name: Code Quality & Schema Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pyyaml
+
+      - name: Python Syntax & Lint Check
+        run: |
+          # Prüft alle Python-Dateien auf Syntaxfehler und grobe Flake8-Verstöße
+          python -m compileall src/
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Validate Cloud Workflows YAML
+        run: |
+          python -c "import yaml; yaml.safe_load(open('infra/workflows/pipeline.yaml'))"
+          echo "Cloud Workflows pipeline.yaml is valid YAML!"
+
+      - name: Validate Grafana Dashboard JSON
+        run: |
+          python -c "import json; json.load(open('dashboards/youtube_dataops_monitoring.json'))"
+          echo "Grafana Dashboard JSON is valid!"

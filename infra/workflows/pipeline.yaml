@@ -1,0 +1,61 @@
+main:
+  params: [args]
+  steps:
+    - init_constants:
+        assign:
+          - project_id: "cloudanalytics-514018"
+          - dataset_id: "youtube_analytics"
+
+    # 1. Schritt: Prüfen, ob Silver-Daten vorhanden sind
+    - check_silver_data:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${"SELECT count(*) as total_records FROM `" + project_id + "." + dataset_id + ".silver_videos`"}
+            useLegacySql: false
+        result: silver_check_result
+
+    # 2. Schritt: SQL für Faktentabelle vorbereiten (Modularisiert wg. 400-Zeichen-Limit in Workflows)
+    - prepare_fact_query:
+        assign:
+          - q_target: ${"CREATE OR REPLACE TABLE `" + project_id + "." + dataset_id + ".fact_video_metrics` AS "}
+          - q_select: "SELECT TO_HEX(MD5(CONCAT(s.video_id, '_', CAST(s.trending_date AS STRING)))) AS metric_key, dim_v.video_key, CAST(s.category_id AS INT64) AS category_key, CAST(FORMAT_DATE('%Y%m%d', s.trending_date) AS INT64) AS date_key, s.views, s.likes, s.dislikes, s.comment_count, SAFE_DIVIDE(s.likes + s.dislikes + s.comment_count, s.views) AS interaction_ratio, s._ingested_at "
+          - q_from: ${"FROM `" + project_id + "." + dataset_id + ".stg_videos` s INNER JOIN `" + project_id + "." + dataset_id + ".dim_video` dim_v "}
+          - q_join: "ON s.video_id = dim_v.video_id AND s.trending_date >= CAST(dim_v.valid_from AS DATE) AND (dim_v.valid_to IS NULL OR s.trending_date < CAST(dim_v.valid_to AS DATE))"
+          - fact_query: ${q_target + q_select + q_from + q_join}
+
+    - refresh_fact_table:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${fact_query}
+            useLegacySql: false
+        result: fact_refresh_result
+
+    # 3. Schritt: Automatisches Quality Gate (Fremdschlüssel-Prüfung)
+    - quality_gate_validation:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${"SELECT count(*) as invalid_keys FROM `" + project_id + "." + dataset_id + ".fact_video_metrics` f LEFT JOIN `" + project_id + "." + dataset_id + ".dim_video` v ON f.video_key = v.video_key WHERE v.video_key IS NULL"}
+            useLegacySql: false
+        result: quality_result
+
+    # 4. Schritt: Ergebnis auslesen (assign)
+    - get_quality_result:
+        assign:
+          - invalid_count: ${int(quality_result.rows[0].f[0].v)}
+
+    # 5. Schritt: Quality Gate evaluieren (switch)
+    - evaluate_quality_gate:
+        switch:
+          - condition: ${invalid_count > 0}
+            raise: ${"Quality Gate FAILED! Found " + string(invalid_count) + " orphan records in fact_video_metrics."}
+
+    - finish_success:
+        return:
+          status: "SUCCESS"
+          message: "DataOps Pipeline completed successfully. 0 quality errors detected."

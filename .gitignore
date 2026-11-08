@@ -10,6 +10,7 @@ gcp_key.json
 !data/raw/US_category_id.json
 !docker/**
 !dags/**
+!dashboards/**
 
 # Python environment & cache
 __pycache__/
