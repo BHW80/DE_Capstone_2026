@@ -389,66 +389,74 @@ Alle Operationen werden über standardisierte, robuste PowerShell-Runner gesteue
 
 ## 📂 Repository Layout
 
+> **Architektur-Legende:**  
+> 🟢 `[v2.1 Active]` = Aktiver Serverless Cloud & Observability Stack (Cloud Workflows, Terraform, Grafana Cloud, CI/CD)  
+> 🟢 `[v2.0 Active]` = Aktiver Lakehouse & Kimball DWH Stack (Apache Iceberg V2, dbt Star-Schema, BigQuery)  
+> 🟡 `[v1.0 Legacy / Deprecated]` = Stand Release v1.0.0 (in v2.0/v2.1 durch dbt & serverlose Cloud Workflows abgelöst)
+
 ```
 DE_Capstone_2026/
-├── .github/workflows/                    # ⭐ CI/CD Automation (GitHub Actions)
-│   ├── ci.yml                            # Automatisierte Syntax-, Lint- & Schema-Prüfung
-│   └── release.yml                       # Automatisierte Release-Erstellung bei Tag-Push
-├── dashboards/                           # ⭐ Observability-as-Code
-│   └── youtube_dataops_monitoring.json   # Grafana Cloud Dashboard für Workflows & BigQuery
-├── dbt/                                  # ⭐ Cloud DWH Transformationen (Kimball & SCD-2)
-│   ├── dbt_project.yml                   # dbt Projektkonfiguration
-│   ├── profiles.yml                      # BigQuery Verbindungsprofil (Region EU)
-│   ├── snapshots/
-│   │   └── dim_video_snapshot.sql        # SCD-2 Snapshot-Definition (valid_from, valid_to)
+├── .github/workflows/                    # 🟢 [v2.1 Active] ⭐ CI/CD Automation (GitHub Actions)
+│   ├── ci.yml                            # 🟢 [v2.1 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
+│   └── release.yml                       # 🟢 [v2.1 Active] Automatisierte Release-Erstellung bei Tag-Push
+├── dashboards/                           # 🟢 [v2.1 Active] ⭐ Observability-as-Code
+│   └── youtube_dataops_monitoring.json   # 🟢 [v2.1 Active] Grafana Cloud Dashboard für Workflows & BigQuery
+├── dags/                                 # 🟡 [v1.0 Legacy] Apache Airflow DAGs (in v2.1 durch Cloud Workflows abgelöst)
+│   ├── de_capstone_pipeline.py           # 🟡 [v1.0 Legacy] Lokale Airflow Pipeline (Bronze -> Silver -> Gold)
+│   └── de_cloud_release_pipeline.py      # 🟡 [v1.0 Legacy] Alter BigQuery Parquet Sync
+├── dbt/                                  # 🟢 [v2.0 Active] ⭐ Cloud DWH Transformationen (Kimball & SCD-2)
+│   ├── dbt_project.yml                   # 🟢 [v2.0 Active] dbt Projektkonfiguration
+│   ├── profiles.yml                      # 🟢 [v2.0 Active] BigQuery Verbindungsprofil (Region EU)
+│   ├── snapshots/                        # 🟢 [v2.0 Active] ⭐ SCD-2 Snapshot-Definitionen
+│   │   └── dim_video_snapshot.sql        # 🟢 [v2.0 Active] SCD-2 Snapshot-Definition (valid_from, valid_to)
 │   └── models/
 │       ├── staging/
-│       │   ├── sources.yml               # BigQuery Quelltabellen-Definition
-│       │   └── stg_videos.sql            # Typisierung & Deduplizierungs-View
-│       └── marts/core/                   # Kimball Star-Schema Marts
-│           ├── dim_video.sql             # SCD-2 Dimension mit is_current Flag
-│           ├── dim_category.sql          # Conformed Kategorie-Dimension
-│           ├── dim_date.sql              # Vorberechnete Datumsdimension
-│           ├── fact_video_metrics.sql    # Interaktions-Fakten mit Point-in-Time Join
-│           └── schema.yml                # 15 automatisierte dbt Tests (Quality Gate)
-├── infra/                                # ⭐ Infrastructure as Code (Terraform 1.17)
-│   ├── versions.tf                       # Terraform & Google Provider Versionen
-│   ├── variables.tf                      # Variablen (project_id, region, service_account)
-│   ├── main.tf                           # Deklaration von GCS, BigQuery, Pub/Sub & Workflows
-│   └── workflows/
-│       └── pipeline.yaml                 # Definition des Google Cloud Workflows
-├── docker/                               # Docker Compose Setups
-│   ├── docker-compose-kafka.yml          # Apache Kafka KRaft & Kafka-UI
-│   ├── docker-compose-spark.yml          # Ephemerer PySpark Compute Container
-│   ├── docker-compose-airflow.yml        # (v1.0 Legacy) Lokaler Airflow Stack
-│   ├── docker-compose-monitoring.yml     # (v1.0 Legacy) Lokaler Prometheus/Grafana Stack
-│   ├── prometheus.yml                    # Prometheus Konfiguration
-│   └── grafana_datasources.yml           # Grafana Datasource Auto-Provisioning
+│       │   ├── sources.yml               # 🟢 [v2.0 Active] BigQuery Quelltabellen-Definition (silver_videos)
+│       │   └── stg_videos.sql            # 🟢 [v2.0 Active] Typisierung & Deduplizierungs-View
+│       └── marts/core/                   # 🟢 [v2.0 Active] ⭐ Kimball Star-Schema Marts
+│           ├── dim_video.sql             # 🟢 [v2.0 Active] SCD-2 Dimension mit is_current Flag
+│           ├── dim_category.sql          # 🟢 [v2.0 Active] Conformed Kategorie-Dimension
+│           ├── dim_date.sql              # 🟢 [v2.0 Active] Vorberechnete Datumsdimension
+│           ├── fact_video_metrics.sql    # 🟢 [v2.0 Active] Interaktions-Fakten mit Point-in-Time Join
+│           └── schema.yml                # 🟢 [v2.0 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
+├── infra/                                # 🟢 [v2.0 Active] ⭐ Infrastructure as Code (Terraform 1.17)
+│   ├── versions.tf                       # 🟢 [v2.0 Active] Terraform & Google Provider Versionen
+│   ├── variables.tf                      # 🟢 [v2.0 Active] Parameter (project_id, region, service_account)
+│   ├── main.tf                           # 🟢 [v2.0 Active] GCS Bucket, BigQuery Dataset & Pub/Sub Topics
+│   └── workflows/                        # 🟢 [v2.1 Active] ⭐ Serverless Cloud Workflows Orchestrierung
+│       └── pipeline.yaml                 # 🟢 [v2.1 Active] Definition des Google Cloud Workflows & Quality Gate
+├── docker/                               # Modulare Docker Compose Setups
+│   ├── docker-compose-kafka.yml          # 🟢 [v2.0 Active] Apache Kafka KRaft & Kafka-UI
+│   ├── docker-compose-spark.yml          # 🟢 [v2.0 Active] Ephemerer PySpark Compute Container
+│   ├── docker-compose-airflow.yml        # 🟡 [v1.0 Legacy] Lokaler Airflow & PostgreSQL Stack
+│   ├── docker-compose-monitoring.yml     # 🟡 [v1.0 Legacy] Lokaler Prometheus & Grafana Container Stack
+│   ├── prometheus.yml                    # 🟡 [v1.0 Legacy] Prometheus Scrape-Konfiguration
+│   └── grafana_datasources.yml           # 🟡 [v1.0 Legacy] Grafana Datasource Auto-Provisioning
 ├── src/                                  # Quellcode
-│   ├── producer.py                       # Streaming-Producer (Fault Injection + SCD-2 Mutation)
-│   ├── consumer_bronze.py                # Bronze Ingestion Consumer
-│   ├── consumer_dlq.py                   # Dead Letter Queue Consumer (Quarantäne)
-│   ├── transform_silver.py               # PySpark Job mit Apache Iceberg V2 Commit
-│   ├── transform_gold.py                 # (v1.0 Legacy) Altes Spark-Gold Skript
-│   ├── cloud_loader_bigquery.py          # BigQuery Idempotenter Parquet & Silver Uploader
-│   └── cloud_workflow_runner.py          # REST-Client für Google Cloud Workflows Ausführung
-├── run_producer.ps1                      # Runner: Streaming Producer
-├── run_bronze.ps1                        # Runner: Bronze Kafka Ingestion
-├── run_dlq.ps1                           # Runner: Dead Letter Queue Consumer
-├── run_silver.ps1                        # Runner: PySpark Apache Iceberg Job
-├── run_gold.ps1                          # Runner: Legacy Spark Gold Job
-├── run_dbt.ps1                           # Runner: dbt CLI (debug, snapshot, run, test)
-├── run_infra.ps1                         # Runner: Terraform CLI (init, plan, apply, destroy)
-├── run_workflow.ps1                      # Runner: Google Cloud Workflow
-├── load_to_bigquery.ps1                  # Runner: BigQuery Cloud Ingestion
-├── start_kafka.ps1                       # Runner: Start Kafka & UI
-├── stop_kafka.ps1                        # Runner: Stopp Kafka & UI
-├── start_monitoring.ps1                  # Runner: Start lokales Monitoring
-├── stop_monitoring.ps1                   # Runner: Stopp lokales Monitoring
-├── start_airflow.ps1                     # Runner: Start Airflow
-├── stop_airflow.ps1                      # Runner: Stopp Airflow
-├── requirements.txt                      # Python-Abhängigkeiten
-└── README.md                             # Vollständige Projektdokumentation
+│   ├── producer.py                       # 🟢 [v2.0 Active] Streaming-Producer (Fault Injection + SCD-2 Mutation)
+│   ├── consumer_bronze.py                # 🟢 [v2.0 Active] Bronze Ingestion Consumer
+│   ├── consumer_dlq.py                   # 🟢 [v2.0 Active] Dead Letter Queue Consumer (Quarantäne)
+│   ├── transform_silver.py               # 🟢 [v2.0 Active] PySpark Job mit Apache Iceberg V2 Commit
+│   ├── transform_gold.py                 # 🟡 [v1.0 Legacy] Altes Spark-Gold Skript (abgelöst durch dbt Marts)
+│   ├── cloud_loader_bigquery.py          # 🟢 [v2.0 Active] BigQuery Idempotenter Parquet & Silver Uploader
+│   └── cloud_workflow_runner.py          # 🟢 [v2.1 Active] REST-Client für Google Cloud Workflows Ausführung
+├── run_producer.ps1                      # 🟢 [v2.0 Active] Runner: Streaming Producer (Fault Injection + SCD-2)
+├── run_bronze.ps1                        # 🟢 [v2.0 Active] Runner: Bronze Kafka Ingestion
+├── run_dlq.ps1                           # 🟢 [v2.0 Active] Runner: Dead Letter Queue (DLQ) Consumer
+├── run_silver.ps1                        # 🟢 [v2.0 Active] Runner: PySpark Apache Iceberg Job
+├── run_gold.ps1                          # 🟡 [v1.0 Legacy] Runner: Altes Spark-Gold (abgelöst durch run_dbt.ps1)
+├── run_dbt.ps1                           # 🟢 [v2.0 Active] Runner: dbt CLI (debug, snapshot, run, test)
+├── run_infra.ps1                         # 🟢 [v2.0 Active] Runner: Terraform CLI (init, plan, apply, destroy)
+├── run_workflow.ps1                      # 🟢 [v2.1 Active] Runner: Serverless Cloud Workflow (BigQuery & Quality Gate)
+├── load_to_bigquery.ps1                  # 🟢 [v2.0 Active] Runner: BigQuery Cloud Ingestion
+├── start_kafka.ps1                       # 🟢 [v2.0 Active] Runner: Start Kafka & Kafka-UI
+├── stop_kafka.ps1                        # 🟢 [v2.0 Active] Runner: Stopp Kafka & Kafka-UI
+├── start_monitoring.ps1                  # 🟡 [v1.0 Legacy] Runner: Start lokales Monitoring (Prometheus/Grafana)
+├── stop_monitoring.ps1                   # 🟡 [v1.0 Legacy] Runner: Stopp lokales Monitoring
+├── start_airflow.ps1                     # 🟡 [v1.0 Legacy] Runner: Start Airflow (optional v1.0)
+├── stop_airflow.ps1                      # 🟡 [v1.0 Legacy] Runner: Stopp Airflow
+├── requirements.txt                      # 🟢 [v2.0 Active] Python-Abhängigkeiten (inkl. dbt-bigquery, Iceberg)
+└── README.md                             # 🟢 [v2.1 Active] Vollständige Projektdokumentation
 ```
 
 ---
