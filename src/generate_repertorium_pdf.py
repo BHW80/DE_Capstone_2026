@@ -530,6 +530,110 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
         "Enterprise-Cloud-Dienste bei absolut minimiertem Kosten- und Wartungsaufwand.",
         s['body']
     ))
+    story.append(Spacer(1, 10))
+
+    story.append(Paragraph("2.3 Notwendigkeits-Analyse pro Release: Was ist erforderlich – und was nicht?", s['h2']))
+    story.append(Paragraph(
+        "Ein häufiges Missverständnis in gewachsenen Datenprojekten ist die Verwechslung von historisch mitgeschlepptem "
+        "Code mit produktiv notwendigen Komponenten. Die folgende Aufstellung definiert für jeden Release exakt, "
+        "welche Artefakte, Tools und Berechtigungen zwingend erforderlich sind und welche bewusst eliminiert oder abgelöst wurden.",
+        s['body']
+    ))
+
+    req_table_data = [
+        [Paragraph("<b>Release</b>", s['th']), Paragraph("<b>Zwingend notwendig (Must-Have)</b>", s['th']), Paragraph("<b>Vollständig überflüssig / Nicht notwendig</b>", s['th'])],
+        [
+            Paragraph("<b>v1.0.0<br/>(Foundation)</b>", s['td_bold']),
+            Paragraph(
+                "• Docker Desktop & Docker Compose<br/>"
+                "• Apache Kafka im KRaft-Modus (`kafka:9092`)<br/>"
+                "• Streaming Producer mit DLQ-Routing (`src/producer.py`)<br/>"
+                "• Bronze & DLQ Consumer (`src/consumer_*.py`)<br/>"
+                "• Ephemerer Docker PySpark (`transform_silver.py`, `transform_gold.py`)<br/>"
+                "• Lokaler Airflow 2.9 & PostgreSQL Stack (`dags/`, `docker-compose-airflow.yml`)<br/>"
+                "• Lokaler Prometheus & Grafana Container-Stack (`docker-compose-monitoring.yml`)",
+                s['td']
+            ),
+            Paragraph(
+                "• <b>Kein GCP Cloud Account zwingend nötig</b> (reines Offline-Testing möglich)<br/>"
+                "• <b>Kein BigQuery</b> (Speicherung rein lokal als Snappy Parquet)<br/>"
+                "• <b>Kein dbt Core</b> (Transformationen rein in Spark Python)<br/>"
+                "• <b>Kein Apache Iceberg</b> (reine lose Parquet-Dateien)<br/>"
+                "• <b>Kein Terraform</b> (reine Docker Compose Verwaltung)<br/>"
+                "• <b>Keine Cloud Workflows</b> (Scheduler ist lokaler Airflow)<br/>"
+                "• <b>Keine Grafana Cloud</b> (lokaler Container auf Port 3000)<br/>"
+                "• <b>Kein GitHub Actions CI/CD</b>",
+                s['td']
+            )
+        ],
+        [
+            Paragraph("<b>v2.0.0<br/>(Lakehouse & Kimball Marts)</b>", s['td_bold']),
+            Paragraph(
+                "• Python Virtual Environment (`.venv`) mit `requirements.txt`<br/>"
+                "• Google Cloud Projekt (`cloudanalytics-514018`) & Key (`gcp_service_account.json`)<br/>"
+                "• GCP IAM-Rollen: `roles/bigquery.admin`, `roles/storage.admin`<br/>"
+                "• Apache Iceberg V2 Runtime JARs im Spark-Container (`iceberg-spark-runtime-3.5`)<br/>"
+                "• Lokaler Iceberg Warehouse Speicher (`data/iceberg_warehouse/silver/videos/`)<br/>"
+                "• dbt Core Projekt (`dbt/`) mit BigQuery-Profil (`profiles.yml`)<br/>"
+                "• dbt SCD-2 Snapshots (`dim_video_snapshot.sql`)<br/>"
+                "• 15 automatisierte dbt Tests (`schema.yml`)<br/>"
+                "• Idempotenter BigQuery Uploader (`src/cloud_loader_bigquery.py`)",
+                s['td']
+            ),
+            Paragraph(
+                "• <b>Altes Spark Gold Script (`transform_gold.py`, `run_gold.ps1`):</b> Nicht mehr nötig! Vollständig durch dbt Marts in BigQuery abgelöst.<br/>"
+                "• <b>Lose Parquet-Dateien im Silver-Layer:</b> Nicht mehr nötig! Durch Apache Iceberg V2 mit ACID und Time-Travel ersetzt.<br/>"
+                "• <b>SCD-1 Überschreibung:</b> Abgelöst durch SCD-2 Snapshot Historisierung.<br/>"
+                "• <b>Noch nicht vorhanden / nicht nötig:</b> Terraform, Cloud Workflows, Pub/Sub Topics, Grafana Cloud, GitHub Actions CI/CD.",
+                s['td']
+            )
+        ],
+        [
+            Paragraph("<b>v2.1.0<br/>(Serverless Cloud & Observability)<br/>[AKTUELLE PRODUKTION]</b>", s['td_bold']),
+            Paragraph(
+                "• Terraform 1.17 (`run_infra.ps1`)<br/>"
+                "• GCP Service Account mit erweiterten Rollen (`workflows.admin`, `serviceAccountUser`, `monitoring.viewer`, `pubsub.admin`)<br/>"
+                "• Aktivierte GCP APIs (`workflows`, `monitoring`, `pubsub`, `bigquery`, `storage`)<br/>"
+                "• Deklarative Cloud-Infrastruktur (`infra/main.tf`, `variables.tf`)<br/>"
+                "• Serverless Cloud Workflow State-Machine (`infra/workflows/pipeline.yaml`)<br/>"
+                "• Python REST Workflow-Runner (`src/cloud_workflow_runner.py`, `run_workflow.ps1`)<br/>"
+                "• In-Workflow Quality Gate (Orphan-Key Validation vor Freigabe)<br/>"
+                "• Grafana Cloud Account mit nativer Google Cloud Monitoring Data Source (Weg 1)<br/>"
+                "• Dashboard-as-Code (`dashboards/youtube_dataops_monitoring.json`)<br/>"
+                "• GitHub Actions Workflows (`.github/workflows/ci.yml`, `release.yml`)",
+                s['td']
+            ),
+            Paragraph(
+                "• <b>Lokaler Airflow Stack (`dags/`, `docker-compose-airflow.yml`, `start_airflow.ps1`, `stop_airflow.ps1`):</b> "
+                "<b>VOLLSTÄNDIG ÜBERFLÜSSIG!</b> Zu 100% durch den serverlosen Google Cloud Workflow abgelöst. "
+                "Spart 24/7 laufende Container und im Cloud-Betrieb rund 300 €/Monat für Cloud Composer.<br/>"
+                "• <b>Lokaler Prometheus & Grafana Container-Stack (`docker-compose-monitoring.yml`, `start_monitoring.ps1`, `stop_monitoring.ps1`):</b> "
+                "<b>NICHT MEHR NÖTIG!</b> Grafana Cloud fragt GCP Monitoring direkt serverlos ab (0 lokale Daemons, 0 Ressourcenverbrauch).<br/>"
+                "• <b>Altes Spark Gold Script (`src/transform_gold.py`):</b> Veraltet und redundant.<br/>"
+                "• <b>Manuelle Klicks in der GCP Webkonsole ('ClickOps'):</b> Durch Terraform vollständig eliminiert.",
+                s['td']
+            )
+        ]
+    ]
+    t_req = Table(req_table_data, colWidths=[105, 195, 200])
+    t_req.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), s['primary']),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+    ]))
+    story.append(t_req)
+    story.append(Spacer(1, 10))
+
+    story.append(make_callout(
+        "<b>Wichtiger Betriebshinweis für Release v2.1.0:</b> Für den aktuellen Produktivbetrieb müssen "
+        "weder Airflow (`start_airflow.ps1`) noch der lokale Monitoring-Stack (`start_monitoring.ps1`) gestartet werden! "
+        "Der gesamte Cloud-Lifecycle läuft 100% serverlos über Terraform (`run_infra.ps1`), BigQuery Ingestion (`load_to_bigquery.ps1`), "
+        "dbt Core (`run_dbt.ps1`), Cloud Workflows (`run_workflow.ps1`) und Grafana Cloud.",
+        s, "Produktions-Leitlinie"
+    ))
     story.append(PageBreak())
 
     # =========================================================================

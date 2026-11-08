@@ -71,6 +71,25 @@ Vollständiger Übergang in eine professionelle, kosteneffiziente Cloud-Architek
 
 ---
 
+## 🔍 Notwendigkeits-Matrix über alle drei Releases (Was wird gebraucht – und was nicht?)
+
+Ein zentraler Aspekt professioneller Software- und DataOps-Entwicklung ist die strikte Unterscheidung zwischen **zwingend notwendigen Produktivkomponenten** und **historisch abgelöstem bzw. überflüssigem Code (Deprecations)**.
+
+Die folgende Matrix definiert für jede Release-Stufe exakt, welche Tools, Container und Cloud-Dienste erforderlich sind:
+
+| Release | 🟢 Zwingend notwendig (Must-Have) | 🔴 Vollständig überflüssig / Nicht notwendig |
+| :--- | :--- | :--- |
+| **Release v1.0.0**<br/>*(Core Foundation)* | • **Docker Desktop & Compose**<br/>• **Apache Kafka KRaft** (Port 9092)<br/>• **Streaming Producer** mit DLQ (`src/producer.py`)<br/>• **Bronze & DLQ Consumer** (`src/consumer_*.py`)<br/>• **Ephemerer Docker PySpark** (`src/transform_silver.py`, `src/transform_gold.py`)<br/>• **Lokaler Airflow 2.9 & Postgres Stack** (`docker-compose-airflow.yml`, `dags/`)<br/>• **Lokaler Prometheus & Grafana Stack** (`docker-compose-monitoring.yml`) | • **Kein GCP Cloud Account zwingend nötig** (reines lokales Offline-Testing möglich)<br/>• **Kein BigQuery** (Speicherung rein lokal als Snappy Parquet)<br/>• **Kein dbt Core** (Transformationen rein in Spark Python)<br/>• **Kein Apache Iceberg** (nur lose Parquet-Dateien)<br/>• **Kein Terraform** (reine Docker Compose Verwaltung)<br/>• **Keine Cloud Workflows** (Scheduler ist lokaler Airflow)<br/>• **Keine Grafana Cloud** (lokaler Container auf Port 3000)<br/>• **Kein GitHub Actions CI/CD** |
+| **Release v2.0.0**<br/>*(Lakehouse & Kimball Marts)* | • **Python Virtual Environment** (`.venv`) mit `requirements.txt`<br/>• **GCP Projekt** (`cloudanalytics-514018`) & Key (`gcp_service_account.json`)<br/>• **GCP IAM-Rollen:** `roles/bigquery.admin`, `roles/storage.admin`<br/>• **Apache Iceberg V2 Runtime** im Spark-Container (`iceberg-spark-runtime-3.5`)<br/>• **Iceberg Warehouse Speicher** (`data/iceberg_warehouse/silver/videos/`)<br/>• **dbt Core Projekt** (`dbt/`) mit BigQuery-Profil (`profiles.yml`)<br/>• **dbt SCD-2 Snapshots** (`dim_video_snapshot.sql`)<br/>• **15 automatisierte dbt Tests** (`schema.yml`)<br/>• **Idempotenter BigQuery Uploader** (`src/cloud_loader_bigquery.py`, `load_to_bigquery.ps1`) | • **Altes Spark Gold Script (`transform_gold.py`, `run_gold.ps1`):** Nicht mehr nötig! Vollständig durch dbt Marts in BigQuery abgelöst.<br/>• **Lose Parquet-Dateien im Silver-Layer:** Nicht mehr nötig! Durch Apache Iceberg V2 mit ACID und Time-Travel ersetzt.<br/>• **SCD-1 Überschreibung:** Abgelöst durch SCD-2 Snapshot Historisierung.<br/>• **Noch nicht vorhanden / nicht nötig:** Terraform, Cloud Workflows, Pub/Sub Topics, Grafana Cloud, GitHub Actions CI/CD. |
+| **Release v2.1.0**<br/>*(Serverless Cloud & Observability)<br/>**[AKTUELLE PRODUKTION]*** | • **Terraform 1.17** (`run_infra.ps1`)<br/>• **GCP Service Account mit erweiterten Rollen:** `workflows.admin`, `serviceAccountUser`, `monitoring.viewer`, `pubsub.admin`<br/>• **Aktivierte GCP APIs:** `workflows`, `monitoring`, `pubsub`, `bigquery`, `storage`<br/>• **Deklarative Cloud-Infrastruktur:** `infra/main.tf`, `variables.tf`<br/>• **Serverless Cloud Workflow State-Machine:** `infra/workflows/pipeline.yaml`<br/>• **REST Workflow-Runner:** `src/cloud_workflow_runner.py`, `run_workflow.ps1`<br/>• **In-Workflow Quality Gate:** Foreign-Key-Orphan-Check in BigQuery<br/>• **Grafana Cloud Account:** Native Google Cloud Monitoring Data Source ("Weg 1")<br/>• **Dashboard-as-Code:** `dashboards/youtube_dataops_monitoring.json`<br/>• **GitHub Actions CI/CD Workflows:** `.github/workflows/ci.yml`, `release.yml` | • **Lokaler Airflow Stack (`dags/`, `docker-compose-airflow.yml`, `start_airflow.ps1`, `stop_airflow.ps1`):**<br/>👉 **VOLLSTÄNDIG ÜBERFLÜSSIG!** Zu 100% durch den serverlosen Google Cloud Workflow abgelöst. Spart 24/7 laufende Container und im Cloud-Betrieb rund 300 €/Monat für Cloud Composer.<br/>• **Lokaler Prometheus & Grafana Container-Stack (`docker-compose-monitoring.yml`, `start_monitoring.ps1`, `stop_monitoring.ps1`):**<br/>👉 **NICHT MEHR NÖTIG!** Grafana Cloud fragt GCP Monitoring direkt serverlos ab (0 lokale Daemons, 0 CPU-Last auf deinem Rechner).<br/>• **Altes Spark Gold Script (`src/transform_gold.py`, `run_gold.ps1`):** Veraltet und redundant.<br/>• **Manuelle Klicks in der GCP Webkonsole ("ClickOps"):** Durch Terraform vollständig eliminiert. |
+
+> [!IMPORTANT]
+> **Betriebs-Leitlinie für Release v2.1.0 (Aktuell):**
+> Für den regulären Betrieb und Tests müssen **weder Airflow (`start_airflow.ps1`) noch der lokale Monitoring-Stack (`start_monitoring.ps1`) gestartet werden!**  
+> Die gesamte Produktions-Pipeline läuft 100% serverlos über Terraform (`run_infra.ps1`), BigQuery-Loader (`load_to_bigquery.ps1`), dbt Core (`run_dbt.ps1`), Cloud Workflows (`run_workflow.ps1`) und Grafana Cloud. Die alten Skripte und Docker-Compose-Dateien verbleiben im Repository, um den Migrationspfad von v1.0 nachvollziehbar zu belegen.
+
+---
+
 ## 📐 End-to-End Systemarchitektur
 
 ```mermaid
