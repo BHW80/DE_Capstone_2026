@@ -261,55 +261,59 @@ Für dbt steht das universelle Runner-Skript [`run_dbt.ps1`](run_dbt.ps1) bereit
 
 ## 📂 Repository Layout
 
+> **Architektur-Legende:**  
+> 🟢 `[v2.0 Active]` = Aktiver Produktions- & Cloud-Stack (Apache Iceberg V2, dbt Star-Schema, BigQuery)  
+> 🟡 `[v1.0 Legacy / Deprecated]` = Stand Release v1.0.0 (in v2.0 durch dbt & serverlose Cloud Workflows abgelöst)
+
 ```
 DE_Capstone_2026/
-├── dags/                                 # Apache Airflow DAG Definitionen
-│   ├── de_capstone_pipeline.py           # Lokale Medallion-Pipeline (Bronze -> Silver -> Gold -> Gate)
-│   └── de_cloud_release_pipeline.py      # Automatisierter BigQuery-Release-DAG
-├── dbt/                                  # dbt Core Projekt (Kimball DWH & SCD-2)
-│   ├── dbt_project.yml                   # dbt Projektkonfiguration
-│   ├── profiles.yml                      # BigQuery Profil (Verbindung via gcp_service_account.json)
-│   ├── snapshots/                        # ⭐ SCD-2 Snapshot Definitionen
-│   │   └── dim_video_snapshot.sql        # Überwacht Titel-, Kanal- und Kategorieänderungen
+├── dags/                                 # 🟡 [v1.0 Legacy] Apache Airflow DAGs (in v2.0 durch Cloud Workflows abgelöst)
+│   ├── de_capstone_pipeline.py           # 🟡 [v1.0 Legacy] Lokale Pipeline (Bronze -> Silver -> Gold)
+│   └── de_cloud_release_pipeline.py      # 🟡 [v1.0 Legacy] Alter BigQuery-Sync
+├── dbt/                                  # 🟢 [v2.0 Active] Modernes Cloud DWH Projekt (Kimball & SCD-2)
+│   ├── dbt_project.yml                   # 🟢 [v2.0 Active] dbt Projektkonfiguration
+│   ├── profiles.yml                      # 🟢 [v2.0 Active] BigQuery-Verbindung (Region EU via Service Account)
+│   ├── snapshots/                        # 🟢 [v2.0 Active] ⭐ SCD-2 Snapshot Definitionen
+│   │   └── dim_video_snapshot.sql        # 🟢 [v2.0 Active] Historisiert Titel- & Metadatenänderungen
 │   └── models/
 │       ├── staging/
-│       │   ├── sources.yml               # Deklaration der BigQuery-Quelltabellen
-│       │   └── stg_videos.sql            # Typisierung & Bereinigungs-View
-│       └── marts/core/                   # ⭐ Kimball Star-Schema Marts
-│           ├── dim_video.sql             # SCD-2 Dimension mit is_current Flag
-│           ├── dim_category.sql          # Conformed Kategorie-Dimension
-│           ├── dim_date.sql              # Kalender- & Datumsdimension
-│           ├── fact_video_metrics.sql    # Faktentabelle mit täglichen Interaktionsmetriken
-│           └── schema.yml                # ⭐ Quality Gate (15 automatisierte Integritätstests)
+│       │   ├── sources.yml               # 🟢 [v2.0 Active] Quelltabellen-Definition (silver_videos)
+│       │   └── stg_videos.sql            # 🟢 [v2.0 Active] Typisierung & Bereinigungs-View
+│       └── marts/core/                   # 🟢 [v2.0 Active] ⭐ Kimball Star-Schema Marts
+│           ├── dim_video.sql             # 🟢 [v2.0 Active] SCD-2 Dimension mit is_current Flag
+│           ├── dim_category.sql          # 🟢 [v2.0 Active] Conformed Kategorie-Dimension
+│           ├── dim_date.sql              # 🟢 [v2.0 Active] Vorberechnete Datumsdimension
+│           ├── fact_video_metrics.sql    # 🟢 [v2.0 Active] Faktentabelle mit täglichen Interaktionsmetriken
+│           └── schema.yml                # 🟢 [v2.0 Active] ⭐ Quality Gate (15 automatisierte dbt Tests)
 ├── docker/                               # Modulare Docker Compose Konfigurationen
-│   ├── docker-compose-kafka.yml          # Apache Kafka KRaft & Kafka-UI
-│   ├── docker-compose-spark.yml          # Ephemerer PySpark Compute Container
-│   ├── docker-compose-airflow.yml        # Airflow Standalone & PostgreSQL
-│   ├── docker-compose-monitoring.yml     # Prometheus & Grafana Stack
-│   ├── prometheus.yml                    # Prometheus Scrape-Konfiguration
-│   └── grafana_datasources.yml           # Grafana Datasource Auto-Provisioning
+│   ├── docker-compose-kafka.yml          # 🟢 [v2.0 Active] Apache Kafka KRaft & Kafka-UI
+│   ├── docker-compose-spark.yml          # 🟢 [v2.0 Active] Ephemerer PySpark Compute Container
+│   ├── docker-compose-airflow.yml        # 🟡 [v1.0 Legacy] Lokaler Airflow & PostgreSQL Stack
+│   ├── docker-compose-monitoring.yml     # 🟢 [v2.0 Active] Prometheus & Grafana Stack
+│   ├── prometheus.yml                    # 🟢 [v2.0 Active] Prometheus Scrape-Konfiguration
+│   └── grafana_datasources.yml           # 🟢 [v2.0 Active] Grafana Datasource Auto-Provisioning
 ├── src/                                  # Python & PySpark Quellcode
-│   ├── producer.py                       # Streaming-Producer (Fault Injection + SCD-2 Mutation)
-│   ├── consumer_bronze.py                # Bronze Ingestion Consumer
-│   ├── consumer_dlq.py                   # Dead Letter Queue Consumer (Quarantäne)
-│   ├── transform_silver.py               # PySpark Silver-Transformation mit Apache Iceberg V2
-│   ├── transform_gold.py                 # PySpark Gold Aggregationen & Window Functions
-│   └── cloud_loader_bigquery.py          # BigQuery Idempotenter Parquet & Silver Uploader
-├── run_producer.ps1                      # Runner: Streaming Producer (Fault Injection + SCD-2)
-├── run_bronze.ps1                        # Runner: Bronze Kafka Ingestion
-├── run_dlq.ps1                           # Runner: Dead Letter Queue (DLQ) Consumer
-├── run_silver.ps1                        # Runner: PySpark Apache Iceberg Job
-├── run_gold.ps1                          # Runner: PySpark Gold Aggregation
-├── run_dbt.ps1                           # Runner: dbt CLI Steuerung (debug, run, snapshot, test)
-├── load_to_bigquery.ps1                  # Runner: Google BigQuery Cloud Release
-├── start_kafka.ps1                       # Runner: Start Apache Kafka & Kafka-UI
-├── stop_kafka.ps1                        # Runner: Stopp Apache Kafka & Kafka-UI
-├── start_airflow.ps1                     # Runner: Start Airflow & PostgreSQL
-├── stop_airflow.ps1                      # Runner: Stopp Airflow
-├── start_monitoring.ps1                  # Runner: Start Prometheus & Grafana
-├── stop_monitoring.ps1                   # Runner: Stopp Prometheus & Grafana
-├── requirements.txt                      # Python-Bibliotheken (inkl. dbt-bigquery, PySpark, PyArrow)
-└── README.md                             # Vollständige Projektdokumentation
+│   ├── producer.py                       # 🟢 [v2.0 Active] Streaming-Producer (Fault Injection + SCD-2 Mutation)
+│   ├── consumer_bronze.py                # 🟢 [v2.0 Active] Bronze Ingestion Consumer
+│   ├── consumer_dlq.py                   # 🟢 [v2.0 Active] Dead Letter Queue Consumer (Quarantäne)
+│   ├── transform_silver.py               # 🟢 [v2.0 Active] PySpark Transformation mit Apache Iceberg V2
+│   ├── transform_gold.py                 # 🟡 [v1.0 Legacy] Altes Spark-Gold (abgelöst durch dbt Marts)
+│   └── cloud_loader_bigquery.py          # 🟢 [v2.0 Active] BigQuery Idempotenter Parquet & Silver Uploader
+├── run_producer.ps1                      # 🟢 [v2.0 Active] Runner: Streaming Producer (Fault Injection + SCD-2)
+├── run_bronze.ps1                        # 🟢 [v2.0 Active] Runner: Bronze Kafka Ingestion
+├── run_dlq.ps1                           # 🟢 [v2.0 Active] Runner: Dead Letter Queue (DLQ) Consumer
+├── run_silver.ps1                        # 🟢 [v2.0 Active] Runner: PySpark Apache Iceberg Job
+├── run_gold.ps1                          # 🟡 [v1.0 Legacy] Runner: Altes Spark-Gold (abgelöst durch run_dbt.ps1)
+├── run_dbt.ps1                           # 🟢 [v2.0 Active] Runner: dbt CLI Steuerung (debug, run, snapshot, test)
+├── load_to_bigquery.ps1                  # 🟢 [v2.0 Active] Runner: Google BigQuery Cloud Ingestion
+├── start_kafka.ps1                       # 🟢 [v2.0 Active] Runner: Start Apache Kafka & Kafka-UI
+├── stop_kafka.ps1                        # 🟢 [v2.0 Active] Runner: Stopp Apache Kafka & Kafka-UI
+├── start_airflow.ps1                     # 🟡 [v1.0 Legacy] Runner: Start Airflow (optional v1.0)
+├── stop_airflow.ps1                      # 🟡 [v1.0 Legacy] Runner: Stopp Airflow
+├── start_monitoring.ps1                  # 🟢 [v2.0 Active] Runner: Start Prometheus & Grafana
+├── stop_monitoring.ps1                   # 🟢 [v2.0 Active] Runner: Stopp Prometheus & Grafana
+├── requirements.txt                      # 🟢 [v2.0 Active] Python-Bibliotheken (inkl. dbt-bigquery, Iceberg)
+└── README.md                             # 🟢 [v2.0 Active] Vollständige Projektdokumentation
 ```
 
 ---
