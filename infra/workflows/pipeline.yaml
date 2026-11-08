@@ -1,3 +1,7 @@
+# =============================================================================
+# Google Cloud Workflows: Full End-to-End Serverless Lakehouse & DWH Pipeline
+# Orchestriert: GCS Silver Load -> Staging -> SCD-2 & Kimball Dims -> Fact -> Quality Gate
+# =============================================================================
 main:
   params: [args]
   steps:
@@ -5,8 +9,25 @@ main:
         assign:
           - project_id: "cloudanalytics-514018"
           - dataset_id: "youtube_analytics"
+          - bucket_uri: "gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet"
 
-    # 1. Schritt: Prüfen, ob Silver-Daten vorhanden sind
+    # 1. Cloud-to-Cloud Load: GCS Silver Parquet -> BigQuery silver_videos
+    - prepare_load_query:
+        assign:
+          - l_p1: ${"LOAD DATA OVERWRITE `" + project_id + "." + dataset_id + ".silver_videos` "}
+          - l_p2: ${"FROM FILES (format = 'PARQUET', uris = ['" + bucket_uri + "'])"}
+          - load_query: ${l_p1 + l_p2}
+
+    - load_gcs_silver_to_bq:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${load_query}
+            useLegacySql: false
+        result: load_result
+
+    # 2. Pruefe, ob Daten im Silver-Layer vorhanden sind
     - check_silver_data:
         call: googleapis.bigquery.v2.jobs.query
         args:
@@ -16,7 +37,82 @@ main:
             useLegacySql: false
         result: silver_check_result
 
-    # 2. Schritt: SQL für Faktentabelle vorbereiten (Modularisiert wg. 400-Zeichen-Limit in Workflows)
+    # 3. Baue Staging View (stg_videos) mit idempotenter Deduplizierung
+    - prepare_stg_query:
+        assign:
+          - s_p1: ${"CREATE OR REPLACE VIEW `" + project_id + "." + dataset_id + ".stg_videos` AS "}
+          - s_p2: "SELECT TRIM(video_id) AS video_id, CAST(trending_date AS DATE) AS trending_date, TRIM(title) AS title, TRIM(channel_title) AS channel_title, "
+          - s_p3: "CAST(category_id AS INT64) AS category_id, COALESCE(TRIM(category_name), 'Unknown') AS category_name, CAST(publish_time AS TIMESTAMP) AS publish_time, "
+          - s_p4: "TRIM(tags) AS tags, CAST(views AS INT64) AS views, CAST(likes AS INT64) AS likes, CAST(dislikes AS INT64) AS dislikes, CAST(comment_count AS INT64) AS comment_count, CAST(_ingested_at AS TIMESTAMP) AS _ingested_at "
+          - s_p5: ${"FROM `" + project_id + "." + dataset_id + ".silver_videos` WHERE video_id IS NOT NULL "}
+          - s_p6: "QUALIFY ROW_NUMBER() OVER (PARTITION BY TRIM(video_id), CAST(trending_date AS DATE) ORDER BY CAST(_ingested_at AS TIMESTAMP) DESC) = 1"
+          - stg_query: ${s_p1 + s_p2 + s_p3 + s_p4 + s_p5 + s_p6}
+
+    - build_stg_videos:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${stg_query}
+            useLegacySql: false
+        result: stg_result
+
+    # 4. Baue Conformed Dimension: dim_category
+    - prepare_dim_category_query:
+        assign:
+          - c_p1: ${"CREATE OR REPLACE TABLE `" + project_id + "." + dataset_id + ".dim_category` AS "}
+          - c_p2: "SELECT DISTINCT CAST(category_id AS INT64) AS category_key, CAST(category_id AS INT64) AS category_id, category_name "
+          - c_p3: ${"FROM `" + project_id + "." + dataset_id + ".stg_videos` WHERE category_id IS NOT NULL"}
+          - dim_cat_query: ${c_p1 + c_p2 + c_p3}
+
+    - build_dim_category:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${dim_cat_query}
+            useLegacySql: false
+        result: dim_cat_result
+
+    # 5. Baue Kalender-Dimension: dim_date
+    - prepare_dim_date_query:
+        assign:
+          - d_p1: ${"CREATE OR REPLACE TABLE `" + project_id + "." + dataset_id + ".dim_date` AS "}
+          - d_p2: ${"WITH ds AS (SELECT DISTINCT trending_date AS full_date FROM `" + project_id + "." + dataset_id + ".stg_videos` WHERE trending_date IS NOT NULL) "}
+          - d_p3: "SELECT CAST(FORMAT_DATE('%Y%m%d', full_date) AS INT64) AS date_key, full_date, EXTRACT(YEAR FROM full_date) AS year, EXTRACT(MONTH FROM full_date) AS month, "
+          - d_p4: "FORMAT_DATE('%B', full_date) AS month_name, EXTRACT(DAY FROM full_date) AS day, EXTRACT(DAYOFWEEK FROM full_date) AS day_of_week, FORMAT_DATE('%A', full_date) AS day_name, "
+          - d_p5: "CASE WHEN EXTRACT(DAYOFWEEK FROM full_date) IN (1, 7) THEN TRUE ELSE FALSE END AS is_weekend FROM ds"
+          - dim_date_query: ${d_p1 + d_p2 + d_p3 + d_p4 + d_p5}
+
+    - build_dim_date:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${dim_date_query}
+            useLegacySql: false
+        result: dim_date_result
+
+    # 6. Baue SCD-2 Dimension: dim_video (inkl. 3 Historien-Versionen fuer 2kyS6SvSYSE)
+    - prepare_dim_video_query:
+        assign:
+          - v_p1: ${"CREATE OR REPLACE TABLE `" + project_id + "." + dataset_id + ".dim_video` AS "}
+          - v_p2: ${"WITH vg AS (SELECT video_id, title, channel_title, category_id, tags, MIN(trending_date) AS v_start FROM `" + project_id + "." + dataset_id + ".stg_videos` GROUP BY 1,2,3,4,5), "}
+          - v_p3: "tl AS (SELECT TO_HEX(MD5(CONCAT(video_id, '_', CAST(v_start AS STRING)))) AS video_key, video_id, title, channel_title, category_id, tags, "
+          - v_p4: "CAST(v_start AS TIMESTAMP) AS valid_from, LEAD(CAST(v_start AS TIMESTAMP)) OVER (PARTITION BY video_id ORDER BY v_start ASC) AS valid_to FROM vg) "
+          - v_p5: "SELECT video_key, video_id, title, channel_title, category_id, tags, valid_from, valid_to, CASE WHEN valid_to IS NULL THEN TRUE ELSE FALSE END AS is_current FROM tl"
+          - dim_video_query: ${v_p1 + v_p2 + v_p3 + v_p4 + v_p5}
+
+    - build_dim_video_scd2:
+        call: googleapis.bigquery.v2.jobs.query
+        args:
+          projectId: ${project_id}
+          body:
+            query: ${dim_video_query}
+            useLegacySql: false
+        result: dim_video_result
+
+    # 7. Baue Faktentabelle: fact_video_metrics (Point-in-Time SCD-2 Join)
     - prepare_fact_query:
         assign:
           - q_target: ${"CREATE OR REPLACE TABLE `" + project_id + "." + dataset_id + ".fact_video_metrics` AS "}
@@ -34,7 +130,7 @@ main:
             useLegacySql: false
         result: fact_refresh_result
 
-    # 3. Schritt: Automatisches Quality Gate (Fremdschlüssel-Prüfung)
+    # 8. DataOps Quality Gate: Pruefe auf verwaiste Fremdschluessel (Orphan Keys)
     - quality_gate_validation:
         call: googleapis.bigquery.v2.jobs.query
         args:
@@ -44,12 +140,10 @@ main:
             useLegacySql: false
         result: quality_result
 
-    # 4. Schritt: Ergebnis auslesen (assign)
     - get_quality_result:
         assign:
           - invalid_count: ${int(quality_result.rows[0].f[0].v)}
 
-    # 5. Schritt: Quality Gate evaluieren (switch)
     - evaluate_quality_gate:
         switch:
           - condition: ${invalid_count > 0}
@@ -58,4 +152,4 @@ main:
     - finish_success:
         return:
           status: "SUCCESS"
-          message: "DataOps Pipeline completed successfully. 0 quality errors detected."
+          message: "Full End-to-End Cloud Lakehouse & Star-Schema Pipeline completed successfully (GCS -> Silver -> Staging -> SCD-2 Dims -> Fact -> 0 Quality Errors)."

@@ -1,8 +1,10 @@
 import base64
+import io
 import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 import pandas as pd
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2 import service_account
@@ -11,11 +13,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("CloudPubSubDLQConsumer")
 
 PROJECT_ID = "cloudanalytics-514018"
+BUCKET_NAME = f"lakehouse-youtube-{PROJECT_ID}"
 SUBSCRIPTION_DLQ = "sub-youtube-dlq"
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 KEY_PATH = ROOT_DIR / "gcp_service_account.json"
-QUARANTINE_DIR = ROOT_DIR / "data" / "quarantine"
 
 
 def get_session():
@@ -26,14 +28,35 @@ def get_session():
     return AuthorizedSession(credentials)
 
 
+def delete_existing_gcs_prefix(session: AuthorizedSession, prefix: str):
+    list_url = f"https://storage.googleapis.com/storage/v1/b/{BUCKET_NAME}/o"
+    resp = session.get(list_url, params={"prefix": prefix})
+    if resp.status_code == 200:
+        for item in resp.json().get("items", []):
+            obj_name = item["name"]
+            del_url = f"https://storage.googleapis.com/storage/v1/b/{BUCKET_NAME}/o/{quote(obj_name, safe='')}"
+            session.delete(del_url)
+
+
+def upload_bytes_to_gcs(session: AuthorizedSession, object_name: str, data_bytes: bytes):
+    upload_url = f"https://storage.googleapis.com/upload/storage/v1/b/{BUCKET_NAME}/o"
+    resp = session.post(
+        upload_url,
+        params={"uploadType": "media", "name": object_name},
+        data=data_bytes,
+        headers={"Content-Type": "application/octet-stream"}
+    )
+    if resp.status_code not in (200, 201):
+        raise RuntimeError(f"GCS Upload Fehler ({object_name}): {resp.status_code} - {resp.text}")
+
+
 def run_pubsub_dlq_consumer():
-    QUARANTINE_DIR.mkdir(parents=True, exist_ok=True)
     session = get_session()
 
     pull_url = f"https://pubsub.googleapis.com/v1/projects/{PROJECT_ID}/subscriptions/{SUBSCRIPTION_DLQ}:pull"
     ack_url = f"https://pubsub.googleapis.com/v1/projects/{PROJECT_ID}/subscriptions/{SUBSCRIPTION_DLQ}:acknowledge"
 
-    logger.info(f"Ziehe Quarantaene-Nachrichten aus Cloud Pub/Sub Subscription '{SUBSCRIPTION_DLQ}'...")
+    logger.info(f"Pruefe Dead Letter Queue Subscription '{SUBSCRIPTION_DLQ}' auf fehlerhafte Events...")
     records = []
 
     while True:
@@ -52,29 +75,36 @@ def run_pubsub_dlq_consumer():
             raw_json = base64.b64decode(msg["data"]).decode("utf-8")
             record = json.loads(raw_json)
 
-            # Quarantaene Audit-Metadaten
+            # DLQ Quarantaene Audit-Metadaten
             record["_quarantine_at"] = datetime.now(timezone.utc).isoformat()
-            record["_kafka_offset"] = len(records) + idx
-            record["_kafka_partition"] = 0
+            record["_dlq_offset"] = len(records) + idx
+            record["_dlq_partition"] = 0
             records.append(record)
 
         session.post(ack_url, json={"ackIds": ack_ids})
         logger.info(f"{len(received)} DLQ-Nachrichten empfangen und bestaetigt (Gesamt: {len(records)})...")
 
     if not records:
-        logger.warning(f"Keine Nachrichten in '{SUBSCRIPTION_DLQ}' gefunden.")
+        logger.info(f"Keine fehlerhaften Nachrichten in '{SUBSCRIPTION_DLQ}' gefunden.")
         return
 
     df = pd.DataFrame(records)
     timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    output_file = QUARANTINE_DIR / f"quarantine_videos_{timestamp_str}.parquet"
-    df.to_parquet(output_file, engine="pyarrow", index=False)
+    gcs_object_name = f"quarantine/quarantine_videos_{timestamp_str}.parquet"
 
-    logger.info("=" * 60)
-    logger.info(f"DLQ-ERFOLG (CLOUD PUB/SUB -> QUARANTINE): {len(df)} fehlerhafte Datensaetze isoliert:")
-    logger.info(f"-> Speicherort: {output_file.relative_to(ROOT_DIR)}")
-    logger.info(f"-> Dateigroesse: {output_file.stat().st_size / 1024:.1f} KB")
-    logger.info("=" * 60)
+    # In-Memory Parquet erzeugen (0 lokale Dateien!) und direkt in den GCS Lakehouse Bucket schreiben
+    buf = io.BytesIO()
+    df.to_parquet(buf, engine="pyarrow", index=False)
+    parquet_bytes = buf.getvalue()
+
+    delete_existing_gcs_prefix(session, "quarantine/")
+    upload_bytes_to_gcs(session, gcs_object_name, parquet_bytes)
+
+    logger.info("=" * 65)
+    logger.info(f"QUARANTAENE-ISOLATION (CLOUD PUB/SUB -> GCS DLQ): {len(df)} korrupte Zeilen isoliert!")
+    logger.info(f"-> GCS URI: gs://{BUCKET_NAME}/{gcs_object_name}")
+    logger.info(f"-> Dateigroesse: {len(parquet_bytes) / 1024:.1f} KB (0 lokale Parquet-Dateien)")
+    logger.info("=" * 65)
 
 
 if __name__ == "__main__":

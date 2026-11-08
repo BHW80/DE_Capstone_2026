@@ -1,12 +1,12 @@
-Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "Starte Silver Transformation via Apache Spark Container..." -ForegroundColor Cyan
-Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "=====================================================================" -ForegroundColor Cyan
+Write-Host "Starte Cloud Silver & Apache Iceberg V2 Transformation (100% GCS)..." -ForegroundColor Cyan
+Write-Host "=====================================================================" -ForegroundColor Cyan
 
-docker compose -f docker/docker-compose-spark.yml run --rm spark /opt/spark/bin/spark-submit --packages org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.2 /app/src/transform_silver.py
+& "$PSScriptRoot\.venv\Scripts\python.exe" "$PSScriptRoot\src\cloud_silver_gcs.py"
 
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "`nSpark Job erfolgreich abgeschlossen!" -ForegroundColor Green
-    Write-Host "Ergebnis abgelegt in: data/silver/ und data/iceberg_warehouse/" -ForegroundColor Green
+    Write-Host "`nSilver & Iceberg V2 Transformation erfolgreich in GCS abgeschlossen!" -ForegroundColor Green
 } else {
-    Write-Host "`nFehler beim Ausfuehren des Spark Jobs (Exit Code: $LASTEXITCODE)" -ForegroundColor Red
+    Write-Host "`nFehler bei der Silver Transformation (Exit Code: $LASTEXITCODE)" -ForegroundColor Red
+    exit $LASTEXITCODE
 }

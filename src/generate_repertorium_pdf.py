@@ -449,20 +449,20 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         [
             P("<b>Transaktionssicherheit (ACID)</b>", s['td_bold']),
             P("Flache Parquet-/CSV-Dateien (Gefahr von Teilabbrüchen)", s['td']),
-            P("<b>Apache Iceberg V2</b> Table Format (`local.silver.videos`)", s['td']),
-            P("Garantiert atomare Commits, Snapshot-Isolation, Manifest-Pruning & Time-Travel", s['td'])
+            P("<b>100% GCS Cloud Lakehouse & Apache Iceberg V2</b> (`gs://lakehouse-youtube-...`)", s['td']),
+            P("0 lokale Parquets/Icebergs abseits der Ausgangslage; alle Daten & Snapshots direkt im GCS Bucket", s['td'])
         ],
         [
             P("<b>Historisierung & Auditfähigkeit</b>", s['td_bold']),
             P("SCD-1 (Alte Werte werden blind überschrieben)", s['td']),
-            P("<b>SCD-2 Historisierung</b> via dbt Snapshots & Point-in-Time Joins", s['td']),
-            P("Lückenlose Nachvollziehbarkeit mutierter Videotitel (`2kyS6SvSYSE`) über 3 Versionen", s['td'])
+            P("<b>SCD-2 Historisierung</b> via Cloud Workflows (`LEAD()`) & dbt Snapshots", s['td']),
+            P("Lückenlose Nachvollziehbarkeit mutierter Videotitel (`2kyS6SvSYSE`) über alle 3 Versionen", s['td'])
         ],
         [
-            P("<b>Quality Assurance & Governance</b>", s['td_bold']),
+            P("<b>Orchestrierung & Quality Gates</b>", s['td_bold']),
             P("Keine automatisierten Datenprüfungen", s['td']),
-            P("<b>15 dbt Data Tests + In-Workflow Foreign-Key Gate</b>", s['td']),
-            P("Orphan Records und Schema-Drifts werden vor der BI-Freigabe hart blockiert (`raise`)", s['td'])
+            P("<b>8-Stufen End-to-End Cloud Workflow + 15 dbt Data Tests</b>", s['td']),
+            P("Cloud Workflow steuert GCS->BQ Load, Staging, Dims, Fact & FK-Gate komplett serverlos (`run_pipeline.ps1`)", s['td'])
         ],
         [
             P("<b>Deployment & Reproduzierbarkeit</b>", s['td_bold']),
@@ -561,18 +561,18 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
     # -------------------------------------------------------------------------
     story.append(P("2.4 Abschnitt 3: Prozess & Architektur in Release v2.1.0 (Serverless Cloud & Observability — Aktuelle Produktion)", s['h2']))
     story.append(P(
-        "<b>Architektur-Ziel von `v2.1.0`:</b> Vollständige Eliminierung aller dauerhaft laufenden Infrastruktur-Container durch "
-        "**Terraform IaC (7 GCP-Ressourcen)**, **Serverless Google Cloud Pub/Sub** (löst lokales Docker-Kafka ab), "
-        "**Serverless Google Cloud Workflows** (löst lokalen Airflow ab), **Grafana Cloud Weg 1** (löst lokalen Prometheus/Grafana ab) "
-        "und **GitHub Actions CI/CD**.",
+        "<b>Architektur-Ziel von `v2.1.0`:</b> Vollständige Eliminierung aller dauerhaft laufenden Infrastruktur-Container "
+        "und jeglicher lokaler Zwischenspeicherung (0 lokale Parquets/Icebergs abseits der Ausgangslage `data/raw` & `data/sample`!) durch "
+        "**Terraform IaC (7 GCP-Ressourcen)**, **Serverless Google Cloud Pub/Sub**, **100% Cloud Lakehouse Storage im GCS Bucket**, "
+        "**End-to-End-Steuerung über Google Cloud Workflows (alle 8 DWH-Schritte)**, **Grafana Cloud Weg 1** und **GitHub Actions CI/CD**.",
         s['body']
     ))
-    story.append(P("<b>Der End-to-End-Prozess in Release `v2.1.0` (5 Prozessschritte):</b>", s['h3']))
-    story.append(P("• <b>Prozessschritt 1 (Deklaratives Cloud-Provisioning via Terraform 1.17):</b> `run_infra.ps1 apply` rollt vollautomatisch **7 GCP-Ressourcen** in `cloudanalytics-514018` aus: GCS Lakehouse Bucket, BigQuery Dataset `youtube_analytics`, die beiden Pub/Sub Topics `topic-youtube-ingest` und `topic-youtube-dlq`, die zugehörigen Pull-Subscriptions `sub-youtube-ingest` und `sub-youtube-dlq` sowie den Cloud Workflow `youtube-dataops-pipeline`.", s['bullet']))
-    story.append(P("• <b>Prozessschritt 2 (Serverless Streaming & DLQ via Google Cloud Pub/Sub — Kein lokales Kafka mehr nötig!):</b> `run_pubsub_producer.ps1` (`src/cloud_pubsub_producer.py`) streamt die 500 Events aus `us_videos_mini_500.csv` per HTTPS/REST direkt in die Google Cloud: **444 valide Events** (inkl. der 3 SCD-2 Mutationen von `2kyS6SvSYSE`) gehen an `topic-youtube-ingest`, während **56 korrupte Events (~10%)** sofort in das Cloud-DLQ-Topic `topic-youtube-dlq` isoliert werden. `run_pubsub_bronze.ps1` (`src/cloud_pubsub_consumer_bronze.py`) und `run_pubsub_dlq.ps1` (`src/cloud_pubsub_consumer_dlq.py`) ziehen die Nachrichten per Pull-API aus `sub-youtube-ingest` bzw. `sub-youtube-dlq`, bestätigen sie per `acknowledge` und persistieren sie als Parquet unter `data/bronze/` und `data/quarantine/`.", s['bullet']))
-    story.append(P("• <b>Prozessschritt 3 (Silver Iceberg V2, BigQuery Upload & dbt SCD-2 Star-Schema):</b> Wie in `v2.0.0` transformiert `run_silver.ps1` die Bronze-Daten in Apache Iceberg V2 (`local.silver.videos`), `load_to_bigquery.ps1` lädt sie nach BigQuery (`silver_videos`), und `run_dbt.ps1` (`snapshot`, `run`, `test`) baut und prüft das Kimball Star-Schema (15 Tests `PASS=15`).", s['bullet']))
-    story.append(P("• <b>Prozessschritt 4 (Serverless Orchestrierung & In-Workflow Quality Gate via Cloud Workflows):</b> `run_workflow.ps1` (`src/cloud_workflow_runner.py`) triggert den Cloud Workflow `youtube-dataops-pipeline` in `europe-west3`. Dieser aktualisiert `fact_video_metrics` in BigQuery und führt direkt in der Cloud einen Foreign-Key-Orphan-Check (`LEFT JOIN` gegen `dim_video`) aus (`0 quality errors detected`).", s['bullet']))
-    story.append(P("• <b>Prozessschritt 5 (Zero-Footprint Observability in Grafana Cloud & CI/CD):</b> Grafana Cloud liest über das native Google Cloud Monitoring Plugin (`stackdriver`) live die Metriken von Cloud Workflows, BigQuery und Cloud Pub/Sub (`topic-youtube-ingest` vs. `topic-youtube-dlq`) aus (`dashboards/youtube_dataops_monitoring.json`). Jede Codeänderung wird durch GitHub Actions (`.github/workflows/ci.yml` & `release.yml`) validiert.", s['bullet']))
+    story.append(P("<b>Der End-to-End-Prozess in Release `v2.1.0` (5 Prozessschritte bzw. 1-Klick via `run_pipeline.ps1`):</b>", s['h3']))
+    story.append(P("• <b>Prozessschritt 1 (Deklaratives Cloud-Provisioning via Terraform 1.17):</b> `run_infra.ps1 apply` rollt vollautomatisch **7 GCP-Ressourcen** in `cloudanalytics-514018` aus: GCS Lakehouse Bucket `gs://lakehouse-youtube-cloudanalytics-514018`, BigQuery Dataset `youtube_analytics`, die beiden Pub/Sub Topics `topic-youtube-ingest` und `topic-youtube-dlq`, die Pull-Subscriptions `sub-youtube-ingest` und `sub-youtube-dlq` sowie den 8-stufigen End-to-End Cloud Workflow `youtube-dataops-pipeline`.", s['bullet']))
+    story.append(P("• <b>Prozessschritt 2 (Serverless Streaming & DLQ direkt in GCS — 0 lokale Dateien!):</b> `run_pubsub_producer.ps1` (`src/cloud_pubsub_producer.py`) streamt die 500 Events aus `us_videos_mini_500.csv` per HTTPS/REST an Cloud Pub/Sub (`topic-youtube-ingest` + 10% DLQ an `topic-youtube-dlq`). `run_pubsub_bronze.ps1` (`src/cloud_pubsub_consumer_bronze.py`) und `run_pubsub_dlq.ps1` (`src/cloud_pubsub_consumer_dlq.py`) ziehen die Nachrichten aus `sub-youtube-ingest` bzw. `sub-youtube-dlq`, erzeugen die Parquet-Dateien im Arbeitsspeicher (`io.BytesIO()`) und schreiben sie **direkt in den GCS-Bucket** (`gs://.../bronze/` und `gs://.../quarantine/`).", s['bullet']))
+    story.append(P("• <b>Prozessschritt 3 (Cloud-to-Cloud Silver Transformation & Apache Iceberg V2 im GCS Bucket):</b> `run_silver.ps1` (`src/cloud_silver_gcs.py`) liest die Bronze-Parquets direkt aus `gs://.../bronze/`, führt Typkonvertierung und Kategorie-Join (`US_category_id.json`) durch und schreibt sowohl `gs://.../silver/silver_videos.parquet` als auch das komplette **Apache Iceberg V2 Warehouse** (`gs://.../iceberg_warehouse/silver/videos/`) direkt in den GCS-Bucket. Lokal verbleiben ausschließlich `data/raw` und `data/sample`.", s['bullet']))
+    story.append(P("• <b>Prozessschritt 4 (Vollständige End-to-End-Steuerung über Google Cloud Workflows):</b> `run_workflow.ps1` (`src/cloud_workflow_runner.py`) startet den Cloud Workflow `youtube-dataops-pipeline` in `europe-west3`, der **den gesamten DWH-Ablauf in 8 Schritten serverlos in GCP steuert**: 1. `LOAD DATA OVERWRITE` direkt aus `gs://.../silver/*.parquet` nach BigQuery `silver_videos`, 2. Row-Count-Check, 3. Aufbau `stg_videos`, 4. Aufbau `dim_category`, 5. Aufbau `dim_date`, 6. Aufbau der SCD-2 Dimension `dim_video` (inkl. aller 3 Titelversionen von `2kyS6SvSYSE` per `LEAD()`-Window-Timeline), 7. Aufbau `fact_video_metrics` (Point-in-Time Join) und 8. Foreign-Key Quality Gate (`0 quality errors detected`). Ergänzend validiert `run_dbt.ps1 test` alle 15 dbt-Schema-Tests (`PASS=15`).", s['bullet']))
+    story.append(P("• <b>Prozessschritt 5 (Zero-Footprint Observability in Grafana Cloud & CI/CD):</b> Grafana Cloud liest über das native Google Cloud Monitoring Plugin (`stackdriver`) live die Metriken von Cloud Workflows, BigQuery und Cloud Pub/Sub aus (`dashboards/youtube_dataops_monitoring.json`). Über den Master-Runner `run_pipeline.ps1` laufen die Schritte 2 bis 4 vollautomatisch mit einem einzigen Befehl durch.", s['bullet']))
     story.append(PageBreak())
 
     story.append(P("2.5 Evolutions- und Notwendigkeits-Matrix über alle Releases", s['h2']))
@@ -703,20 +703,18 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
             P("<b>Release v2.1.0</b><br/><i>(Serverless Cloud & Observability)</i><br/><b>[AKTUELLE PRODUKTION]</b>", s['td_bold']),
             P(
                 "• Terraform 1.17 (`run_infra.ps1`: 7 GCP-Ressourcen)<br/>"
-                "• <b>Serverless Google Cloud Pub/Sub</b> (`run_pubsub_producer.ps1`, `run_pubsub_bronze.ps1`, `run_pubsub_dlq.ps1`)<br/>"
-                "• Ephemerer PySpark + Apache Iceberg V2 (`run_silver.ps1`)<br/>"
-                "• BigQuery Loader (`load_to_bigquery.ps1`) & dbt Core (`run_dbt.ps1`)<br/>"
-                "• <b>Serverless Cloud Workflow</b> (`run_workflow.ps1`)<br/>"
-                "• <b>Grafana Cloud (Weg 1)</b> (`youtube_dataops_monitoring.json`)<br/>"
-                "• GitHub Actions CI/CD (`ci.yml`, `release.yml`)",
+                "• <b>1-Klick Master-Runner (`run_pipeline.ps1`)</b><br/>"
+                "• <b>Serverless Pub/Sub -> GCS (`gs://...`)</b> (`run_pubsub_producer.ps1`, `run_pubsub_bronze.ps1`, `run_pubsub_dlq.ps1`)<br/>"
+                "• <b>Cloud Silver & Iceberg V2 in GCS</b> (`run_silver.ps1` / `cloud_silver_gcs.py`)<br/>"
+                "• <b>8-Stufen End-to-End Cloud Workflow</b> (`run_workflow.ps1`) & 15 dbt Tests (`run_dbt.ps1 test`)<br/>"
+                "• <b>Grafana Cloud (Weg 1)</b> & GitHub Actions CI/CD",
                 s['td']
             ),
             P(
-                "• <b>Lokaler Docker-Kafka-Stack (`start_kafka.ps1`, `run_producer.ps1`, `run_bronze.ps1`, `run_dlq.ps1`):</b> "
-                "<b>OPTIONAL / DURCH CLOUD PUB/SUB ABGELÖST!</b> Kein lokaler Kafka-Broker mehr nötig!<br/>"
-                "• <b>Lokaler Airflow Stack (`start_airflow.ps1`, `dags/`):</b> <b>VOLLSTÄNDIG ÜBERFLÜSSIG!</b> Durch Cloud Workflows abgelöst.<br/>"
-                "• <b>Lokaler Monitoring-Stack (`start_monitoring.ps1`):</b> <b>NICHT MEHR NÖTIG!</b> Durch Grafana Cloud abgelöst.<br/>"
-                "• <b>Altes Spark Gold Script (`run_gold.ps1`):</b> Obsolet.",
+                "• <b>Lokale Parquet-/Iceberg-Ordner (`data/bronze`, `quarantine`, `silver`, `iceberg_warehouse`, `gold`):</b> "
+                "<b>ELIMINIERT!</b> Alles liegt zu 100% im GCS Bucket (`gs://lakehouse-youtube-...`), lokal bleibt nur die Ausgangslage (`raw` & `sample`).<br/>"
+                "• <b>Lokaler Docker-Kafka-Stack (`start_kafka.ps1`, `run_producer.ps1` etc.):</b> <b>DURCH CLOUD PUB/SUB ABGELÖST!</b><br/>"
+                "• <b>Lokaler Airflow (`start_airflow.ps1`) & Monitoring (`start_monitoring.ps1`):</b> <b>DURCH CLOUD WORKFLOWS & GRAFANA CLOUD ABGELÖST!</b>",
                 s['td']
             )
         ]
@@ -769,48 +767,44 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         s['body']
     ))
 
-    story.append(P("<b>2. Bronze & Quarantäne Persistenz (Cloud Pull-Subscriptions -> Micro-Batch Parquet):</b>", s['h3']))
+    story.append(P("<b>2. Bronze & Quarantäne Persistenz (In-Memory Parquet direkt in den GCS Bucket — 0 lokale Dateien):</b>", s['h3']))
     story.append(P(
         "Der Cloud-Bronze-Consumer (`src/cloud_pubsub_consumer_bronze.py` via `run_pubsub_bronze.ps1`) zieht die Nachrichten "
         "per Pull-API aus `sub-youtube-ingest`, bestätigt sie (`acknowledge`), ergänzt UTC-Audit-Metadaten (`_ingested_at`, "
-        "`_kafka_offset`, `_kafka_partition`) und speichert Snappy-komprimierte Parquet-Dateien unter `data/bronze/`. "
-        "Parallel isoliert `src/cloud_pubsub_consumer_dlq.py` (`run_pubsub_dlq.ps1`) alle fehlerhaften Nachrichten aus "
-        "`sub-youtube-dlq` inklusive `_quarantine_at` und `_error_reason` unter `data/quarantine/`.",
+        "`_kafka_offset`, `_kafka_partition`), erzeugt Snappy-Parquet im Arbeitsspeicher (`io.BytesIO()`) und schreibt es **direkt in den GCS-Bucket** "
+        "`gs://lakehouse-youtube-cloudanalytics-514018/bronze/`. Parallel isoliert `src/cloud_pubsub_consumer_dlq.py` (`run_pubsub_dlq.ps1`) "
+        "alle fehlerhaften Nachrichten aus `sub-youtube-dlq` direkt nach `gs://lakehouse-youtube-cloudanalytics-514018/quarantine/`. "
+        "Auf der lokalen Festplatte werden keinerlei Bronze- oder Quarantäne-Dateien abgelegt.",
         s['body']
     ))
 
-    story.append(P("<b>3. Silver Layer: Apache Iceberg V2 & Broadcast-Transformation:</b>", s['h3']))
+    story.append(P("<b>3. Silver Layer: Cloud-to-Cloud Transformation & Apache Iceberg V2 im GCS Bucket:</b>", s['h3']))
     story.append(P(
-        "Ein ephemerer PySpark-Container (`de_spark`, `src/transform_silver.py`) liest die Bronze-Parquet-Dateien, "
-        "konvertiert Datentypen (`views`, `likes`, `dislikes`, `comment_count` nach `long`; `trending_date` von `yy.dd.MM` "
-        "nach `DATE`; `publish_time` nach `TIMESTAMP`) und führt einen Zero-Shuffle Broadcast-Join mit `data/raw/US_category_id.json` "
-        "durch. Das Ergebnis wird im Dual-Write-Verfahren atomar in die **Apache Iceberg V2 Tabelle** `local.silver.videos` "
-        "(`data/iceberg_warehouse/silver/videos/`) sowie als Parquet-Snapshot nach `data/silver/` geschrieben.",
+        "Das Modul `src/cloud_silver_gcs.py` (`run_silver.ps1` — bzw. der ephemere PySpark-Job `src/transform_silver.py`) liest die "
+        "Bronze-Parquet-Dateien direkt aus `gs://lakehouse-youtube-cloudanalytics-514018/bronze/`, konvertiert Datentypen (`views`, `likes`, "
+        "`dislikes`, `comment_count` nach `INT64`; `trending_date` von `yy.dd.MM` nach `DATE`; `publish_time` nach `TIMESTAMP`) und führt "
+        "den Kategorie-Join mit `data/raw/US_category_id.json` aus. Das Ergebnis wird **ausschließlich in den Google Cloud Storage Bucket** "
+        "geschrieben: sowohl als `gs://lakehouse-youtube-cloudanalytics-514018/silver/silver_videos.parquet` als auch in das **Apache Iceberg V2 Warehouse** "
+        "`gs://lakehouse-youtube-cloudanalytics-514018/iceberg_warehouse/silver/videos/` (Metadaten & Daten). Lokale Ordner (`data/bronze`, `quarantine`, `silver`, `iceberg_warehouse`, `gold`) existieren nicht mehr.",
         s['body']
     ))
 
-    story.append(P("<b>4. Cloud Ingestion & Google BigQuery Staging:</b>", s['h3']))
+    story.append(P("<b>4. Serverless End-to-End Orchestrierung via Google Cloud Workflows (GCS -> BigQuery -> Star-Schema -> Quality Gate):</b>", s['h3']))
     story.append(P(
-        "Das Skript `src/cloud_loader_bigquery.py` (`load_to_bigquery.ps1`) lädt die bereinigten Silver-Parquet-Daten "
-        "idempotent (`WRITE_TRUNCATE`) in die Quelltabelle `silver_videos` im BigQuery-Dataset `youtube_analytics` (Location `EU`).",
+        "Der per Terraform bereitgestellte Google Cloud Workflow `youtube-dataops-pipeline` (`infra/workflows/pipeline.yaml`, gestartet via "
+        "`run_workflow.ps1` oder `run_pipeline.ps1`) steuert den **gesamten Cloud-DWH-Prozess End-to-End in 8 Schritten**: "
+        "1. `LOAD DATA OVERWRITE` direkt aus `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` in die BigQuery-Tabelle `silver_videos`, "
+        "2. Row-Count-Check, 3. Aufbau des deduplizierten Staging-Views `stg_videos`, 4. Aufbau `dim_category`, 5. Aufbau `dim_date`, "
+        "6. Aufbau der SCD-2-Dimension `dim_video` (mit `LEAD()`-Window-Timeline über alle 3 Titelversionen von `2kyS6SvSYSE`), "
+        "7. Aufbau der Faktentabelle `fact_video_metrics` (Point-in-Time Join) und 8. Foreign-Key Quality Gate (`0 quality errors detected`).",
         s['body']
     ))
 
-    story.append(P("<b>5. Gold Layer & Kimball Star-Schema (dbt Core):</b>", s['h3']))
+    story.append(P("<b>5. Deklarative dbt Core Modelle, 15 Data Tests & Cloud Observability:</b>", s['h3']))
     story.append(P(
-        "**dbt Core** (`run_dbt.ps1`) übernimmt die In-Warehouse-Transformation in BigQuery: Über den idempotenten Staging-View "
-        "`stg_videos` und den SCD-2 Snapshot `dim_video_snapshot` entstehen die Dimensionstabellen `dim_video`, `dim_category` "
-        "und `dim_date` sowie die Faktentabelle `fact_video_metrics` (mit Point-in-Time Join). Anschließend sichern "
-        "15 automatisierte dbt-Tests die Datenqualität ab.",
-        s['body']
-    ))
-
-    story.append(P("<b>6. Serverless Orchestrierung & Cloud Observability:</b>", s['h3']))
-    story.append(P(
-        "Der per Terraform bereitgestellte Google Cloud Workflow `youtube-dataops-pipeline` (`run_workflow.ps1`) "
-        "aktualisiert `fact_video_metrics` serverlos in BigQuery und prüft über ein In-Workflow Quality Gate, dass "
-        "exakt 0 verwaiste Fremdschlüssel (Orphan Records) existieren. Sämtliche Laufzeit-, Kosten- und Streaming-Metriken "
-        "werden ohne lokale Daemons direkt in **Grafana Cloud** (`dashboards/youtube_dataops_monitoring.json`) visualisiert.",
+        "Komplementär zum Cloud Workflow stehen alle Modelle in **dbt Core** (`dbt/`) bereit und werden durch **15 automatisierte dbt-Tests** "
+        "(`run_dbt.ps1 test` -> `PASS=15`) auf Eindeutigkeit, Not-Null und referenzielle Integrität geprüft. Sämtliche Laufzeit-, Kosten- und "
+        "Streaming-Metriken werden ohne lokale Daemons direkt in **Grafana Cloud** (`dashboards/youtube_dataops_monitoring.json`) visualisiert.",
         s['body']
     ))
 
@@ -838,7 +832,10 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "|           +-- schema.yml                # [v2.0 Active] 15 automatisierte dbt Quality Gate Tests\n"
         "|-- infra/                                # [v2.1 Active] Infrastructure as Code (Terraform 1.17)\n"
         "|   |-- versions.tf, variables.tf, main.tf# [v2.1 Active] 7 GCP Ressourcen (GCS, BQ, 2x Topic, 2x Sub, Workflow)\n"
-        "|   +-- workflows/pipeline.yaml           # [v2.1 Active] Serverless Cloud Workflow State-Machine\n"
+        "|   +-- workflows/pipeline.yaml           # [v2.1 Active] 8-Stufen End-to-End Cloud Workflow (GCS->BQ->Star-Schema->Gate)\n"
+        "|-- data/                                 # [v1.0-v2.1] Lokale Ausgangslage (0 lokale Parquets/Icebergs!)\n"
+        "|   |-- raw/US_category_id.json           # [Ausgangslage] Statische YouTube-Kategorie-Referenz\n"
+        "|   +-- sample/us_videos_mini_500.csv     # [Ausgangslage] 500 YouTube-Trending-Events fuer das Streaming\n"
         "|-- docker/                               # Modulare Docker Compose Definitionen\n"
         "|   |-- docker-compose-spark.yml          # [v2.0 Active] Ephemerer PySpark + Iceberg V2 Container\n"
         "|   |-- docker-compose-kafka.yml          # [v1.0/v2.0 Legacy] Lokaler Kafka KRaft (in v2.1 durch Pub/Sub ersetzt)\n"
@@ -846,16 +843,17 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "|   +-- docker-compose-monitoring.yml     # [v1.0 Legacy] Alter lokaler Prometheus/Grafana Stack\n"
         "|-- src/                                  # Python Quellcode\n"
         "|   |-- cloud_pubsub_producer.py          # [v2.1 Active] Serverless GCP Pub/Sub Producer (10% DLQ + SCD-2)\n"
-        "|   |-- cloud_pubsub_consumer_bronze.py   # [v2.1 Active] Serverless Pull-Consumer (sub-youtube-ingest -> Bronze)\n"
-        "|   |-- cloud_pubsub_consumer_dlq.py      # [v2.1 Active] Serverless Pull-Consumer (sub-youtube-dlq -> Quarantine)\n"
+        "|   |-- cloud_pubsub_consumer_bronze.py   # [v2.1 Active] Pull-Consumer -> Direkt in GCS (gs://.../bronze/)\n"
+        "|   |-- cloud_pubsub_consumer_dlq.py      # [v2.1 Active] Pull-Consumer -> Direkt in GCS (gs://.../quarantine/)\n"
+        "|   |-- cloud_silver_gcs.py               # [v2.1 Active] Cloud-to-Cloud Silver & Iceberg V2 in GCS (0 lokale Dateien)\n"
         "|   |-- producer.py                       # [v1.0/v2.0 Legacy] Lokaler Kafka Producer (optional fuer Offline-Tests)\n"
         "|   |-- consumer_bronze.py & consumer_dlq.py # [v1.0/v2.0 Legacy] Lokale Kafka Consumer\n"
         "|   |-- transform_silver.py               # [v2.0 Active] PySpark Broadcast-Join & Apache Iceberg V2\n"
         "|   |-- transform_gold.py                 # [v1.0 Legacy] Altes Spark-Gold (abgeloest durch dbt)\n"
-        "|   |-- cloud_loader_bigquery.py          # [v2.0 Active] Idempotenter BigQuery Parquet Uploader\n"
-        "|   |-- cloud_workflow_runner.py          # [v2.1 Active] REST-Trigger & Live-Poller fuer Cloud Workflows\n"
+        "|   |-- cloud_loader_bigquery.py          # [v2.0/v2.1 Active] Cloud-to-Cloud GCS -> BigQuery Loader\n"
+        "|   |-- cloud_workflow_runner.py          # [v2.1 Active] REST-Trigger & Live-Poller fuer den 8-Stufen Cloud Workflow\n"
         "|   +-- generate_repertorium_pdf.py       # [v2.1 Active] ReportLab Generator fuer das PDF-Repertorium\n"
-        "+-- *.ps1 Runner-Skripte                  # [v2.1 Active] Kapselung aller CLI-Aufrufe fuer PowerShell"
+        "+-- run_pipeline.ps1 & *.ps1 Runner       # [v2.1 Active] One-Click Master-Runner & Einzel-Runner fuer PowerShell"
     )
     story.append(make_code_block(repo_tree_code, s))
     story.append(PageBreak())
@@ -1396,18 +1394,20 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         s['body']
     ))
 
-    story.append(P("9.1 Architektur & Parser-Härtung von `infra/workflows/pipeline.yaml`", s['h2']))
+    story.append(P("9.1 Architektur & 8-Stufen End-to-End Orchestrierung in `infra/workflows/pipeline.yaml`", s['h2']))
     story.append(P(
         "Die State-Machine nutzt den offiziellen Google Cloud BigQuery Connector (`googleapis.bigquery.v2.jobs.query`) "
-        "und berücksichtigt zwei wichtige Produktions-Restriktionen der Cloud Workflows Engine:",
+        "und steuert den **gesamten Cloud-Lakehouse-zu-DWH-Fluss End-to-End in 8 Schritten** direkt in der Google Cloud:",
         s['body']
     ))
-    story.append(P("• <b>400-Zeichen-Limit für Ausdrücke (`${...}`):</b> Da Cloud Workflows dynamische Ausdrücke auf maximal 400 Zeichen begrenzt, ist das SQL-Statement in `prepare_fact_query` sauber in vier Teilvariablen (`q_target`, `q_select`, `q_from`, `q_join`) modularisiert und wird über `${q_target + q_select + q_from + q_join}` konkateniert.", s['bullet']))
-    story.append(P("• <b>Strikte Trennung von `assign` und `switch`:</b> In Cloud Workflows darf ein Schritt nicht gleichzeitig `assign` und `switch` enthalten. Deshalb liest `get_quality_result` zunächst `invalid_count` aus, bevor `evaluate_quality_gate` die Bedingung `${invalid_count > 0}` prüft.", s['bullet']))
+    story.append(P("• <b>Schritt 1 (`load_gcs_silver_to_bq`):</b> Führt `LOAD DATA OVERWRITE` direkt von `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` in die BigQuery-Tabelle `silver_videos` aus (100% Cloud-to-Cloud ohne lokalen Upload).", s['bullet']))
+    story.append(P("• <b>Schritt 2–5 (`check_silver_data`, `build_stg_videos`, `build_dim_category`, `build_dim_date`):</b> Prüft die Zeilenanzahl und erzeugt idempotent den deduplizierten Staging-View sowie die Kategorie- und Kalender-Dimensionen.", s['bullet']))
+    story.append(P("• <b>Schritt 6 (`build_dim_video_scd2`):</b> Berechnet die SCD-2 Dimension `dim_video` mit deterministischer `LEAD()`-Window-Timeline (`valid_from`, `valid_to`, `is_current`), sodass alle 3 historischen Titelversionen des Videos `2kyS6SvSYSE` innerhalb eines Micro-Batches lückenlos erhalten bleiben.", s['bullet']))
+    story.append(P("• <b>Schritt 7 & 8 (`refresh_fact_table`, `quality_gate_validation`, `evaluate_quality_gate`):</b> Baut `fact_video_metrics` mittels Point-in-Time Join auf und prüft anschließend per `LEFT JOIN`, dass exakt 0 verwaiste Fremdschlüssel existieren (`raise` bei Fehlern). Alle `${...}`-Ausdrücke halten das 400-Zeichen-Parser-Limit von Cloud Workflows strikt ein.", s['bullet']))
 
-    story.append(P("9.2 Vollständiger Code von `infra/workflows/pipeline.yaml`", s['h2']))
+    story.append(P("9.2 Auszug der zentralen Schritte aus `infra/workflows/pipeline.yaml`", s['h2']))
     code_workflow = (
-        "# infra/workflows/pipeline.yaml (Vollstaendiger Original-Code)\n"
+        "# infra/workflows/pipeline.yaml (8-Stufen End-to-End Cloud Workflow State-Machine)\n"
         "main:\n"
         "  params: [args]\n"
         "  steps:\n"
@@ -1415,48 +1415,44 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "        assign:\n"
         "          - project_id: \"cloudanalytics-514018\"\n"
         "          - dataset_id: \"youtube_analytics\"\n"
-        "    - check_silver_data:\n"
-        "        call: googleapis.bigquery.v2.jobs.query\n"
-        "        args:\n"
-        "          projectId: ${project_id}\n"
-        "          body:\n"
-        "            query: ${\"SELECT count(*) as total_records FROM `\" + project_id + \".\" + dataset_id + \".silver_videos`\"}\n"
-        "            useLegacySql: false\n"
-        "        result: silver_check_result\n"
-        "    - prepare_fact_query:\n"
+        "          - gcs_silver_uri: \"gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet\"\n"
+        "    - prepare_load_silver_query:\n"
         "        assign:\n"
-        "          - q_target: ${\"CREATE OR REPLACE TABLE `\" + project_id + \".\" + dataset_id + \".fact_video_metrics` AS \"}\n"
-        "          - q_select: \"SELECT TO_HEX(MD5(CONCAT(s.video_id, '_', CAST(s.trending_date AS STRING)))) AS metric_key, dim_v.video_key, CAST(s.category_id AS INT64) AS category_key, CAST(FORMAT_DATE('%Y%m%d', s.trending_date) AS INT64) AS date_key, s.views, s.likes, s.dislikes, s.comment_count, SAFE_DIVIDE(s.likes + s.dislikes + s.comment_count, s.views) AS interaction_ratio, s._ingested_at \"\n"
-        "          - q_from: ${\"FROM `\" + project_id + \".\" + dataset_id + \".stg_videos` s INNER JOIN `\" + project_id + \".\" + dataset_id + \".dim_video` dim_v \"}\n"
-        "          - q_join: \"ON s.video_id = dim_v.video_id AND s.trending_date >= CAST(dim_v.valid_from AS DATE) AND (dim_v.valid_to IS NULL OR s.trending_date < CAST(dim_v.valid_to AS DATE))\"\n"
-        "          - fact_query: ${q_target + q_select + q_from + q_join}\n"
-        "    - refresh_fact_table:\n"
+        "          - q_load_1: ${\"LOAD DATA OVERWRITE `\" + project_id + \".\" + dataset_id + \".silver_videos` \"}\n"
+        "          - q_load_2: ${\"FROM FILES (format = 'PARQUET', uris = ['\" + gcs_silver_uri + \"'])\"}\n"
+        "          - load_silver_query: ${q_load_1 + q_load_2}\n"
+        "    - load_gcs_silver_to_bq:\n"
         "        call: googleapis.bigquery.v2.jobs.query\n"
         "        args:\n"
         "          projectId: ${project_id}\n"
         "          body:\n"
-        "            query: ${fact_query}\n"
+        "            query: ${load_silver_query}\n"
         "            useLegacySql: false\n"
-        "        result: fact_refresh_result\n"
-        "    - quality_gate_validation:\n"
-        "        call: googleapis.bigquery.v2.jobs.query\n"
-        "        args:\n"
-        "          projectId: ${project_id}\n"
-        "          body:\n"
-        "            query: ${\"SELECT count(*) as invalid_keys FROM `\" + project_id + \".\" + dataset_id + \".fact_video_metrics` f LEFT JOIN `\" + project_id + \".\" + dataset_id + \".dim_video` v ON f.video_key = v.video_key WHERE v.video_key IS NULL\"}\n"
-        "            useLegacySql: false\n"
-        "        result: quality_result\n"
-        "    - get_quality_result:\n"
+        "        result: load_silver_result\n"
+        "    # ... [Schritte 2-5: check_silver_data, build_stg_videos, build_dim_category, build_dim_date] ...\n"
+        "    - prepare_dim_video_query:\n"
         "        assign:\n"
-        "          - invalid_count: ${int(quality_result.rows[0].f[0].v)}\n"
-        "    - evaluate_quality_gate:\n"
-        "        switch:\n"
-        "          - condition: ${invalid_count > 0}\n"
-        "            raise: ${\"Quality Gate FAILED! Found \" + string(invalid_count) + \" orphan records in fact_video_metrics.\"}\n"
+        "          - q_dv_1: ${\"CREATE OR REPLACE TABLE `\" + project_id + \".\" + dataset_id + \".dim_video` AS \"}\n"
+        "          - q_dv_2: \"WITH v_versions AS (SELECT video_id, title, channel_title, category_id, tags, MIN(trending_date) AS v_start \"\n"
+        "          - q_dv_3: ${\"FROM `\" + project_id + \".\" + dataset_id + \".stg_videos` GROUP BY 1, 2, 3, 4, 5), \"}\n"
+        "          - q_dv_4: \"v_scd2 AS (SELECT *, CAST(v_start AS TIMESTAMP) AS valid_from, \"\n"
+        "          - q_dv_5: \"LEAD(CAST(v_start AS TIMESTAMP)) OVER (PARTITION BY video_id ORDER BY v_start ASC) AS valid_to FROM v_versions) \"\n"
+        "          - q_dv_6: \"SELECT TO_HEX(MD5(CONCAT(video_id, '_', CAST(valid_from AS STRING)))) AS video_key, \"\n"
+        "          - q_dv_7: \"video_id, title, channel_title, category_id, tags, valid_from, valid_to, (valid_to IS NULL) AS is_current FROM v_scd2\"\n"
+        "          - dim_video_query: ${q_dv_1 + q_dv_2 + q_dv_3 + q_dv_4 + q_dv_5 + q_dv_6 + q_dv_7}\n"
+        "    - build_dim_video_scd2:\n"
+        "        call: googleapis.bigquery.v2.jobs.query\n"
+        "        args:\n"
+        "          projectId: ${project_id}\n"
+        "          body:\n"
+        "            query: ${dim_video_query}\n"
+        "            useLegacySql: false\n"
+        "    # ... [Schritt 7 & 8: refresh_fact_table -> quality_gate_validation -> evaluate_quality_gate] ...\n"
         "    - finish_success:\n"
         "        return:\n"
         "          status: \"SUCCESS\"\n"
-        "          message: \"DataOps Pipeline completed successfully. 0 quality errors detected.\""
+        "          silver_rows_loaded: ${silver_rows}\n"
+        "          message: \"Full End-to-End Cloud Lakehouse & Star-Schema Pipeline completed successfully (GCS -> Silver -> Staging -> SCD-2 Dims -> Fact -> 0 Quality Errors).\""
     )
     story.append(make_code_block(code_workflow, s))
     story.append(PageBreak())
@@ -1681,9 +1677,9 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
 
     risks = [
         (
-            "1. Hybride Storage-Brücke (Lokales Dateisystem statt Native Cloud Object Storage)",
-            "<b>Ist-Zustand (Schwachstelle):</b> In `v2.1.0` ziehen die Pub/Sub-Consumer Daten auf die lokale Festplatte (`data/bronze/`), der Docker-PySpark-Container schreibt das Iceberg-Warehouse lokal (`data/iceberg_warehouse/`), und `load_to_bigquery.py` lädt Parquet von lokal nach BigQuery. Fällt die lokale Workstation aus, steht die Datenbrücke.<br/>"
-            "<b>Enterprise-Mitigation:</b> Vollständige Verlagerung in den bereits per Terraform provisionierten GCS-Bucket `gs://lakehouse-youtube-cloudanalytics-514018/`. Pub/Sub nutzt eine **Cloud Storage Subscription** (oder Cloud Run Jobs), PySpark läuft als **Serverless Dataproc Batch** direkt auf GCS, und BigQuery liest die Iceberg-Metadaten ohne Kopiervorgang über **BigQuery BigLake**."
+            "1. 100% GCS Cloud Storage erreicht — verbleibender lokaler Trigger-Prozess für Pub/Sub & Silver",
+            "<b>Erreichte Härtung in `v2.1.0`:</b> Abseits der Ausgangslage (`data/raw` & `data/sample`) liegen **0 Parquet- oder Iceberg-Dateien lokal**; Bronze, Quarantine, Silver und das Apache Iceberg V2 Warehouse liegen zu 100% im GCS-Bucket `gs://lakehouse-youtube-cloudanalytics-514018/`, und der Cloud Workflow lädt direkt per `LOAD DATA OVERWRITE` aus GCS nach BigQuery.<br/>"
+            "<b>Verbleibendes Enterprise-Risiko & Mitigation:</b> Das Anstoßen der Python-Skripte (`run_pipeline.ps1`) erfolgt im Capstone noch von der Workstation aus. Im 24/7-Enterprise-Betrieb werden die Consumer durch eine native **Pub/Sub Cloud Storage Subscription** (bzw. **Cloud Run Jobs**) ersetzt und vom Cloud Workflow per HTTP-Connector getriggert."
         ),
         (
             "2. Lokaler Terraform-State & Statischer Service-Account-JSON-Schlüssel",
@@ -1691,9 +1687,9 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
             "<b>Enterprise-Mitigation:</b> Auslagerung des Terraform-States in einen versionierten **GCS Remote Backend Bucket** mit nativem State-Locking sowie Umstellung von statischen JSON-Keys auf **Workload Identity Federation (OIDC)** (kurzlebige 1h-OAuth2-Tokens)."
         ),
         (
-            "3. Intra-Batch-Mutationsverlust bei `dbt snapshot` (Micro-Batch vs. Continuous CDC)",
-            "<b>Ist-Zustand (Schwachstelle):</b> `dim_video_snapshot.sql` dedupliziert die Staging-View via `QUALIFY row_number() OVER (PARTITION BY video_id ORDER BY trending_date DESC, _ingested_at DESC) = 1`. Ändert ein Video seinen Titel dreimal innerhalb desselben Micro-Batches, sieht ein einzelner `dbt snapshot`-Lauf nur den letzten Zustand des Batches.<br/>"
-            "<b>Enterprise-Mitigation:</b> Entweder hochfrequente Ausführung von `dbt snapshot` (z. B. alle 5–15 Minuten) oder Berechnung der Versionsgrenzen (`LEAD(trending_date) OVER (PARTITION BY video_id ORDER BY trending_date)`) direkt per Window-Function über den gesamten Event-Stream."
+            "3. Intra-Batch-Mutationsverlust bei `dbt snapshot` — Gelöst durch `LEAD()`-Window-Timeline in `dim_video`",
+            "<b>Hintergrund (Schwachstelle reiner Snapshot-Tabellen):</b> Ein einzelner `dbt snapshot`-Lauf kann pro `video_id` nur einen Zustand pro Batch vergleichen und würde Zwischenmutationen desselben Batches verlieren.<br/>"
+            "<b>Implementierte Lösung in `v2.1.0`:</b> Sowohl Schritt 6 des Cloud Workflows (`build_dim_video_scd2` in `pipeline.yaml`) als auch `dbt/models/marts/core/dim_video.sql` berechnen die SCD-2-Versionsgrenzen (`valid_from`, `valid_to`, `is_current`) deterministisch per `LEAD(CAST(v_start AS TIMESTAMP)) OVER (PARTITION BY video_id ORDER BY v_start ASC)`, sodass alle 3 historischen Titelversionen von `2kyS6SvSYSE` auch innerhalb eines einzigen Micro-Batches lückenlos erhalten bleiben."
         ),
         (
             "4. Full-Refresh (`CREATE OR REPLACE TABLE`) statt Inkrementeller Partitionierung",
@@ -1756,7 +1752,7 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
     story.append(P("• <b>Die 5 zwingend aktivierten Google Cloud APIs:</b><br/>"
                    "  `workflows.googleapis.com`, `monitoring.googleapis.com`, `pubsub.googleapis.com`, `bigquery.googleapis.com`, `storage.googleapis.com`.", s['bullet']))
 
-    story.append(P("13.2 Die 9-Schritte End-to-End Ausführungssequenz für Release v2.1.0 (PowerShell)", s['h2']))
+    story.append(P("13.2 Die End-to-End Ausführungssequenz für Release v2.1.0 (1-Klick oder Einzelbefehle)", s['h2']))
     code_9steps = (
         "# SCHRITT 1: Python Virtual Environment aktivieren & Abhaengigkeiten installieren\n"
         "cd D:\\Projekte\\CloudEng\\DE_Capstone_2026\n"
@@ -1764,28 +1760,26 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass\n"
         ".\\.venv\\Scripts\\Activate.ps1\n"
         "pip install -r requirements.txt\n\n"
-        "# SCHRITT 2: Cloud-Infrastruktur (7 GCP Ressourcen inkl. Pub/Sub Subs) per Terraform ausrollen\n"
+        "# SCHRITT 2: Cloud-Infrastruktur (7 GCP Ressourcen inkl. 8-Stufen Workflow) per Terraform ausrollen\n"
         ".\\run_infra.ps1 init\n"
         ".\\run_infra.ps1 plan\n"
         ".\\run_infra.ps1 apply     # -> Apply complete! Resources: 7 added, 0 changed, 0 destroyed.\n\n"
-        "# SCHRITT 3: Serverless Streaming Ingestion via Google Cloud Pub/Sub (Kein lokales Kafka noetig!)\n"
-        ".\\run_pubsub_producer.ps1 # Sendet 444 Clean Events (topic-youtube-ingest) + 56 DLQ Events (topic-youtube-dlq)\n"
-        ".\\run_pubsub_bronze.ps1   # Zieht 444 Events aus sub-youtube-ingest -> data/bronze/*.parquet\n"
-        ".\\run_pubsub_dlq.ps1      # Isoliert 56 korrupte Events aus sub-youtube-dlq -> data/quarantine/*.parquet\n\n"
-        "# SCHRITT 4: Silver Lakehouse Transformation (Ephemerer PySpark & Apache Iceberg V2)\n"
-        ".\\run_silver.ps1          # Broadcast-Join + Commit in Iceberg (local.silver.videos) & data/silver/\n\n"
-        "# SCHRITT 5: Bereinigte Silver-Daten idempotent nach Google BigQuery laden\n"
-        ".\\load_to_bigquery.ps1    # Laedt 444 Zeilen in cloudanalytics-514018.youtube_analytics.silver_videos\n\n"
-        "# SCHRITT 6: dbt Kimball Star-Schema, SCD-2 Snapshot & 15 Quality-Gate-Tests ausfuehren\n"
-        ".\\run_dbt.ps1 debug       # Prueft BigQuery-Verbindung\n"
-        ".\\run_dbt.ps1 snapshot    # Historisiert Titel-Mutationen (2kyS6SvSYSE) in dim_video_snapshot\n"
-        ".\\run_dbt.ps1 run         # Baut stg_videos, dim_video, dim_category, dim_date, fact_video_metrics\n"
+        "# OPTION A (EMPFOHLEN): Komplette Cloud-Pipeline mit einem einzigen Befehl durchlaufen lassen!\n"
+        ".\\run_pipeline.ps1        # Fuehrt Schritt 3 bis 5 vollautomatisch End-to-End in der Cloud aus!\n\n"
+        "# OPTION B: Einzel-Ausfuehrung der Cloud-Schritte (100% GCS Storage — 0 lokale Parquets/Icebergs):\n"
+        "# SCHRITT 3: Serverless Streaming Ingestion via Cloud Pub/Sub direkt in den GCS Bucket\n"
+        ".\\run_pubsub_producer.ps1 # Sendet ~440 Clean Events (topic-youtube-ingest) + ~60 DLQ Events (topic-youtube-dlq)\n"
+        ".\\run_pubsub_bronze.ps1   # Zieht Clean-Events -> direkt nach gs://lakehouse-youtube-.../bronze/*.parquet\n"
+        ".\\run_pubsub_dlq.ps1      # Isoliert DLQ-Events -> direkt nach gs://lakehouse-youtube-.../quarantine/*.parquet\n\n"
+        "# SCHRITT 4: Cloud-to-Cloud Silver & Apache Iceberg V2 direkt im GCS Bucket\n"
+        ".\\run_silver.ps1          # Schreibt gs://.../silver/silver_videos.parquet & gs://.../iceberg_warehouse/\n\n"
+        "# SCHRITT 5: 8-Stufen Google Cloud Workflow in Frankfurt (europe-west3) ausfuehren\n"
+        ".\\run_workflow.ps1        # Steuert GCS->BQ Load, stg_videos, Dims (SCD-2), Fact & Quality Gate -> SUCCEEDED\n\n"
+        "# SCHRITT 6: 15 automatisierte dbt Data-Quality-Tests gegen BigQuery validieren\n"
         ".\\run_dbt.ps1 test        # -> PASS=15 WARN=0 ERROR=0 SKIP=0 TOTAL=15\n\n"
-        "# SCHRITT 7: Serverless Google Cloud Workflow in Frankfurt (europe-west3) ausfuehren\n"
-        ".\\run_workflow.ps1        # -> Status: SUCCEEDED (0 orphan records in fact_video_metrics)\n\n"
-        "# SCHRITT 8: Grafana Cloud verbinden (Google Cloud Monitoring -> gcp_service_account.json)\n"
+        "# SCHRITT 7: Grafana Cloud verbinden (Google Cloud Monitoring -> gcp_service_account.json)\n"
         "#            & Dashboard importieren: dashboards/youtube_dataops_monitoring.json\n\n"
-        "# SCHRITT 9: Aufraeumen & 0-EUR-Kostengarantie nach Testende\n"
+        "# SCHRITT 8: Aufraeumen & 0-EUR-Kostengarantie nach Testende\n"
         ".\\run_infra.ps1 destroy   # Loescht alle 7 GCP-Ressourcen rueckstandslos (0,00 EUR Kosten)"
     )
     story.append(make_code_block(code_9steps, s))
@@ -1795,14 +1789,15 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
 
     runner_table = [
         [P("<b>Runner-Skript</b>", s['th']), P("<b>Parameter</b>", s['th']), P("<b>Release-Status & Funktion</b>", s['th'])],
+        [P("`run_pipeline.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Master-Runner]</b> 1-Klick End-to-End Lauf (Pub/Sub -> GCS -> Silver/Iceberg GCS -> 8-Stufen Cloud Workflow).", s['td'])],
         [P("`run_infra.ps1`", s['td_bold']), P("`init`, `plan`, `apply`, `destroy`", s['td']), P("<b>[v2.1 Active]</b> Steuert Terraform 1.17 in `infra/` (7 GCP-Ressourcen).", s['td'])],
-        [P("`run_pubsub_producer.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Serverless GCP Pub/Sub Producer (444 Clean, 56 DLQ, SCD-2 Mutationen).", s['td'])],
-        [P("`run_pubsub_bronze.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Serverless Pull-Consumer (`sub-youtube-ingest` -> `data/bronze/*.parquet`).", s['td'])],
-        [P("`run_pubsub_dlq.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Serverless Pull-Consumer (`sub-youtube-dlq` -> `data/quarantine/*.parquet`).", s['td'])],
-        [P("`run_silver.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.0/v2.1 Active]</b> Startet Docker PySpark (`transform_silver.py`) & committet Iceberg V2.", s['td'])],
-        [P("`load_to_bigquery.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.0/v2.1 Active]</b> Lädt Silver-Parquet idempotent nach BigQuery (`silver_videos`).", s['td'])],
-        [P("`run_dbt.ps1`", s['td_bold']), P("`debug`, `snapshot`, `run`, `test`", s['td']), P("<b>[v2.0/v2.1 Active]</b> Steuert dbt Core CLI (SCD-2 Snapshots, Star-Schema, 15 Tests).", s['td'])],
-        [P("`run_workflow.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Triggert den Serverless Cloud Workflow via REST und pollt bis `SUCCEEDED`.", s['td'])],
+        [P("`run_pubsub_producer.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Serverless GCP Pub/Sub Producer (~440 Clean, ~60 DLQ, SCD-2 Mutationen).", s['td'])],
+        [P("`run_pubsub_bronze.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Pull-Consumer (`sub-youtube-ingest` -> direkt `gs://.../bronze/*.parquet`, 0 lokal).", s['td'])],
+        [P("`run_pubsub_dlq.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Pull-Consumer (`sub-youtube-dlq` -> direkt `gs://.../quarantine/*.parquet`, 0 lokal).", s['td'])],
+        [P("`run_silver.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.0/v2.1 Active]</b> Cloud-to-Cloud Silver & Iceberg V2 direkt im GCS Bucket (`gs://.../silver/` & `iceberg_warehouse/`).", s['td'])],
+        [P("`run_workflow.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.1 Active]</b> Startet den 8-Stufen End-to-End Cloud Workflow (GCS->BQ->Star-Schema->Quality Gate).", s['td'])],
+        [P("`load_to_bigquery.ps1`", s['td_bold']), P("Keine", s['td']), P("<b>[v2.0/v2.1 Active]</b> Cloud-to-Cloud GCS -> BigQuery Loader (in v2.1 bereits in Schritt 1 von `run_workflow.ps1` enthalten).", s['td'])],
+        [P("`run_dbt.ps1`", s['td_bold']), P("`debug`, `snapshot`, `run`, `test`", s['td']), P("<b>[v2.0/v2.1 Active]</b> Steuert dbt Core CLI (insb. `run_dbt.ps1 test` für alle 15 Quality-Gate-Tests).", s['td'])],
         [P("`start_kafka.ps1` / `stop_kafka.ps1`", s['td_bold']), P("Keine", s['td']), P("<i>[v1.0/v2.0 Legacy / Optional]</i> Lokaler Docker-Kafka-Stack (in v2.1 durch Pub/Sub ersetzt).", s['td'])],
         [P("`run_producer.ps1`, `run_bronze.ps1`, `run_dlq.ps1`", s['td_bold']), P("Keine", s['td']), P("<i>[v1.0/v2.0 Legacy / Optional]</i> Lokale Kafka Producer/Consumer (in v2.1 durch `run_pubsub_*.ps1` ersetzt).", s['td'])],
         [P("`run_gold.ps1`", s['td_bold']), P("Keine", s['td']), P("<i>[v1.0 Legacy]</i> Altes Spark-Gold-Skript (ab v2.0 durch `run_dbt.ps1` abgelöst).", s['td'])],
