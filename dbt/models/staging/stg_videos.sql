@@ -18,3 +18,7 @@ select
     cast(_ingested_at as timestamp) as _ingested_at
 from source
 where video_id is not null
+qualify row_number() over (
+    partition by trim(video_id), cast(trending_date as date)
+    order by cast(_ingested_at as timestamp) desc
+) = 1

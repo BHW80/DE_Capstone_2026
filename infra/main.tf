@@ -25,14 +25,26 @@ resource "google_bigquery_dataset" "youtube_analytics" {
   delete_contents_on_destroy = true # Für 0-€ Kostensicherheit bei terraform destroy
 }
 
-# 3. Google Cloud Pub/Sub: Ingest Topic (Ersetzt lokales Kafka im Cloud-Betrieb)
+# 3. Google Cloud Pub/Sub: Ingest Topic & Subscription (Ersetzt lokales Kafka im Cloud-Betrieb v2.1)
 resource "google_pubsub_topic" "youtube_ingest" {
   name = "topic-youtube-ingest"
 }
 
-# 4. Google Cloud Pub/Sub: Dead Letter Queue (DLQ) Topic
+resource "google_pubsub_subscription" "youtube_ingest_sub" {
+  name                 = "sub-youtube-ingest"
+  topic                = google_pubsub_topic.youtube_ingest.name
+  ack_deadline_seconds = 20
+}
+
+# 4. Google Cloud Pub/Sub: Dead Letter Queue (DLQ) Topic & Subscription
 resource "google_pubsub_topic" "youtube_dlq" {
   name = "topic-youtube-dlq"
+}
+
+resource "google_pubsub_subscription" "youtube_dlq_sub" {
+  name                 = "sub-youtube-dlq"
+  topic                = google_pubsub_topic.youtube_dlq.name
+  ack_deadline_seconds = 20
 }
 
 # 5. Der Serverless Cloud Workflow (Nutzt den existierenden Service Account)
