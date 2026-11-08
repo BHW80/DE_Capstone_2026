@@ -6,15 +6,27 @@ Erzeugt ein umfassendes, publikationsreifes PDF (20+ Seiten) mit ReportLab.
 """
 
 import sys
+import io
 from pathlib import Path
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import cm, mm, inch
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable, Flowable
 )
 from reportlab.pdfgen import canvas
+
+
+class PageTracker(Flowable):
+    """Zeichnet die exakte physische Seitenzahl eines Kapitels auf."""
+    def __init__(self, chapter_id, storage_dict):
+        super().__init__()
+        self.chapter_id = chapter_id
+        self.storage_dict = storage_dict
+
+    def draw(self):
+        self.storage_dict[self.chapter_id] = self.canv._pageNumber
 
 
 class NumberedCanvas(canvas.Canvas):
@@ -239,17 +251,15 @@ def make_callout(text, s, title="Architektur-Hinweis & Best Practice"):
     return Paragraph(content, s['callout'])
 
 
-def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf"):
-    doc = SimpleDocTemplate(
-        filename,
-        pagesize=A4,
-        leftMargin=50,
-        rightMargin=50,
-        topMargin=54,
-        bottomMargin=54
-    )
+def generate_story(s, chapter_pages=None, tracker_dict=None):
+    if chapter_pages is None:
+        chapter_pages = {}
 
-    s = get_document_styles()
+    def track(ch_id):
+        if tracker_dict is not None:
+            return [PageTracker(ch_id, tracker_dict)]
+        return []
+
     story = []
 
     # =========================================================================
@@ -297,27 +307,27 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     story.append(PageBreak())
 
     # =========================================================================
-    # INHALTSVERZEICHNIS
+    # INHALTSVERZEICHNIS (DYNAMISCH AUS PASS 1 BERECHNET)
     # =========================================================================
     story.append(Paragraph("Inhaltsverzeichnis", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=15))
 
     toc_data = [
-        [Paragraph("<b>1. Management Summary & Strategisches Leitbild</b>", s['td_bold']), Paragraph("Seite 3", s['td'])],
-        [Paragraph("<b>2. Die Evolutionsstufen: 2021 Legacy vs. v1.0 vs. v2.0 vs. v2.1</b>", s['td_bold']), Paragraph("Seite 4", s['td'])],
-        [Paragraph("<b>3. End-to-End Systemarchitektur & Medallion Lakehouse</b>", s['td_bold']), Paragraph("Seite 6", s['td'])],
-        [Paragraph("<b>4. Streaming Ingestion & Resilienz (Kafka KRaft & DLQ)</b>", s['td_bold']), Paragraph("Seite 8", s['td'])],
-        [Paragraph("<b>5. Ephemerer Compute & Open Table Format (Apache Iceberg V2)</b>", s['td_bold']), Paragraph("Seite 10", s['td'])],
-        [Paragraph("<b>6. Cloud Data Warehouse & Kimball Star-Schema (dbt & SCD-2)</b>", s['td_bold']), Paragraph("Seite 12", s['td'])],
-        [Paragraph("<b>7. DataOps Quality Gates & Automatisierte Testverfahren</b>", s['td_bold']), Paragraph("Seite 15", s['td'])],
-        [Paragraph("<b>8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning)</b>", s['td_bold']), Paragraph("Seite 17", s['td'])],
-        [Paragraph("<b>9. Serverlose Orchestrierung (Google Cloud Workflows)</b>", s['td_bold']), Paragraph("Seite 19", s['td'])],
-        [Paragraph("<b>10. Cloud-Native Observability (Grafana Cloud & GCP Monitoring)</b>", s['td_bold']), Paragraph("Seite 21", s['td'])],
-        [Paragraph("<b>11. DataOps CI/CD Pipelines & Release-Management</b>", s['td_bold']), Paragraph("Seite 23", s['td'])],
-        [Paragraph("<b>12. Architectural Decision Records (ADRs) im Detail</b>", s['td_bold']), Paragraph("Seite 25", s['td'])],
-        [Paragraph("<b>13. Betriebshandbuch, Runbooks & Troubleshooting Playbooks</b>", s['td_bold']), Paragraph("Seite 27", s['td'])],
-        [Paragraph("<b>14. Data Engineering Interview Masterclass & Technical Defense</b>", s['td_bold']), Paragraph("Seite 29", s['td'])],
-        [Paragraph("<b>15. FinOps, Kosten-Engineering & Kapazitätsplanung</b>", s['td_bold']), Paragraph("Seite 32", s['td'])],
+        [Paragraph("<b>1. Management Summary & Strategisches Leitbild</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(1, '-')}", s['td'])],
+        [Paragraph("<b>2. Die Evolutionsstufen: 2021 Legacy vs. v1.0 vs. v2.0 vs. v2.1</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(2, '-')}", s['td'])],
+        [Paragraph("<b>3. End-to-End Systemarchitektur & Medallion Lakehouse</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(3, '-')}", s['td'])],
+        [Paragraph("<b>4. Streaming Ingestion & Resilienz (Kafka KRaft & DLQ)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(4, '-')}", s['td'])],
+        [Paragraph("<b>5. Ephemerer Compute & Open Table Format (Apache Iceberg V2)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(5, '-')}", s['td'])],
+        [Paragraph("<b>6. Cloud Data Warehouse & Kimball Star-Schema (dbt & SCD-2)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(6, '-')}", s['td'])],
+        [Paragraph("<b>7. DataOps Quality Gates & Automatisierte Testverfahren</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(7, '-')}", s['td'])],
+        [Paragraph("<b>8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(8, '-')}", s['td'])],
+        [Paragraph("<b>9. Serverlose Orchestrierung (Google Cloud Workflows)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(9, '-')}", s['td'])],
+        [Paragraph("<b>10. Cloud-Native Observability (Grafana Cloud & GCP Monitoring)</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(10, '-')}", s['td'])],
+        [Paragraph("<b>11. DataOps CI/CD Pipelines & Release-Management</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(11, '-')}", s['td'])],
+        [Paragraph("<b>12. Architectural Decision Records (ADRs) im Detail</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(12, '-')}", s['td'])],
+        [Paragraph("<b>13. Betriebshandbuch, Runbooks & Troubleshooting Playbooks</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(13, '-')}", s['td'])],
+        [Paragraph("<b>14. Data Engineering Interview Masterclass & Technical Defense</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(14, '-')}", s['td'])],
+        [Paragraph("<b>15. FinOps, Kosten-Engineering & Kapazitätsplanung</b>", s['td_bold']), Paragraph(f"Seite {chapter_pages.get(15, '-')}", s['td'])],
     ]
     t_toc = Table(toc_data, colWidths=[420, 75])
     t_toc.setStyle(TableStyle([
@@ -331,6 +341,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 1: MANAGEMENT SUMMARY & STRATEGISCHES LEITBILD
     # =========================================================================
+    story.extend(track(1))
     story.append(Paragraph("1. Management Summary & Strategisches Leitbild", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -415,6 +426,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 2: DIE EVOLUTIONSSTUFEN (2021 VS. V1.0 VS. V2.0 VS. V2.1)
     # =========================================================================
+    story.extend(track(2))
     story.append(Paragraph("2. Die Evolutionsstufen der Plattform", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -639,6 +651,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 3: END-TO-END SYSTEMARCHITEKTUR & MEDALLION LAKEHOUSE
     # =========================================================================
+    story.extend(track(3))
     story.append(Paragraph("3. End-to-End Systemarchitektur & Medallion Lakehouse", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -714,6 +727,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 4: STREAMING INGESTION & RESILIENZ (KAFKA KRAFT & DLQ)
     # =========================================================================
+    story.extend(track(4))
     story.append(Paragraph("4. Streaming Ingestion & Resilienz (Apache Kafka KRaft)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -783,6 +797,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 5: EPHEMERER COMPUTE & OPEN TABLE FORMAT (APACHE ICEBERG V2)
     # =========================================================================
+    story.extend(track(5))
     story.append(Paragraph("5. Ephemerer Compute & Open Table Format (Apache Iceberg V2)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -876,6 +891,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 6: CLOUD DWH & KIMBALL STAR-SCHEMA (DBT & SCD-2)
     # =========================================================================
+    story.extend(track(6))
     story.append(Paragraph("6. Cloud Data Warehouse & Kimball Star-Schema (dbt & SCD-2)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -984,6 +1000,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 7: DATAOPS QUALITY GATES & AUTOMATISIERTE TESTS
     # =========================================================================
+    story.extend(track(7))
     story.append(Paragraph("7. DataOps Quality Gates & Automatisierte Testverfahren", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1093,6 +1110,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 8: INFRASTRUCTURE AS CODE (TERRAFORM 1.17)
     # =========================================================================
+    story.extend(track(8))
     story.append(Paragraph("8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1173,6 +1191,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 9: SERVERLOSE ORCHESTRIERUNG (GOOGLE CLOUD WORKFLOWS)
     # =========================================================================
+    story.extend(track(9))
     story.append(Paragraph("9. Serverlose Orchestrierung (Google Cloud Workflows)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1244,6 +1263,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 10: CLOUD-NATIVE OBSERVABILITY (GRAFANA CLOUD & GCP MONITORING)
     # =========================================================================
+    story.extend(track(10))
     story.append(Paragraph("10. Cloud-Native Observability (Grafana Cloud & GCP Monitoring)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1322,6 +1342,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 11: DATAOPS CI/CD & RELEASE-MANAGEMENT
     # =========================================================================
+    story.extend(track(11))
     story.append(Paragraph("11. DataOps CI/CD & Release-Management", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1372,6 +1393,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 12: ARCHITECTURAL DECISION RECORDS (ADRS) IM DETAIL
     # =========================================================================
+    story.extend(track(12))
     story.append(Paragraph("12. Architectural Decision Records (ADRs) im Detail", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1443,6 +1465,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 13: BETRIEBSHANDBUCH, RUNBOOKS & TROUBLESHOOTING
     # =========================================================================
+    story.extend(track(13))
     story.append(Paragraph("13. Betriebshandbuch, Runbooks & Troubleshooting", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1465,9 +1488,12 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
         [Paragraph("`run_silver.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("Startet Docker PySpark, broadcast-joint Genres und committet Iceberg V2.", s['td'])],
         [Paragraph("`load_to_bigquery.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("Lädt Silver Parquet idempotent als Quelltabelle nach Google BigQuery.", s['td'])],
         [Paragraph("`run_dbt.ps1`", s['td_bold']), Paragraph("`debug`, `snapshot`, `run`, `test`", s['td']), Paragraph("Steuert dbt CLI (Verbindungstest, SCD-2 Snapshots, Marts, 15 Tests).", s['td'])],
-        [Paragraph("`run_workflow.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("Triggert den Serverless Cloud Workflow via REST und pollt bis SUCCEEDED.", s['td'])]
+        [Paragraph("`run_workflow.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("Triggert den Serverless Cloud Workflow via REST und pollt bis SUCCEEDED.", s['td'])],
+        [Paragraph("`start_kafka.ps1` / `stop_kafka.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("Startet bzw. stoppt Kafka KRaft & Kafka-UI Container via Docker Compose.", s['td'])],
+        [Paragraph("`start_monitoring.ps1` / `stop_monitoring.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("<i>[v1.0 Legacy]</i> Startet bzw. stoppt lokalen Prometheus & Grafana Stack (in v2.1 durch Grafana Cloud abgelöst).", s['td'])],
+        [Paragraph("`start_airflow.ps1` / `stop_airflow.ps1`", s['td_bold']), Paragraph("Keine", s['td']), Paragraph("<i>[v1.0 Legacy]</i> Startet bzw. stoppt lokalen Airflow Stack (in v2.1 durch Cloud Workflows abgelöst).", s['td'])]
     ]
-    t_run = Table(runner_table, colWidths=[120, 140, 235])
+    t_run = Table(runner_table, colWidths=[130, 130, 235])
     t_run.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), s['primary']),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
@@ -1502,10 +1528,16 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     story.append(Paragraph("<b>Szenario 3: Zero-Cost Disaster Recovery (Neustart von 0)</b>", s['h3']))
     story.append(Paragraph(
         "Um das gesamte System im Desasterfall in unter 3 Minuten vollständig reproduzierbar hochzufahren:<br/>"
-        "1. <code>.\\run_infra.ps1 apply</code> (Erstellt GCS, BigQuery, Pub/Sub, Workflows)<br/>"
-        "2. <code>.\\load_to_bigquery.ps1</code> (Lädt Datenbasis)<br/>"
-        "3. <code>.\\run_dbt.ps1 snapshot; .\\run_dbt.ps1 run; .\\run_dbt.ps1 test</code> (Erstellt DWH Marts)<br/>"
-        "4. <code>.\\run_workflow.ps1</code> (Führt Cloud Orchestrierung aus)",
+        "• <b>Schritt 1 (Lokale Datenbasis generieren, falls Speicher leer):</b><br/>"
+        "  <code>.\\start_kafka.ps1; .\\run_producer.ps1; .\\run_bronze.ps1; .\\run_silver.ps1</code><br/>"
+        "• <b>Schritt 2 (Cloud-Infrastruktur per Terraform bereitstellen):</b><br/>"
+        "  <code>.\\run_infra.ps1 apply</code> (Erstellt GCS Bucket, BigQuery Dataset, Pub/Sub, Workflows)<br/>"
+        "• <b>Schritt 3 (Datenbasis nach BigQuery laden):</b><br/>"
+        "  <code>.\\load_to_bigquery.ps1</code> (Lädt `silver_videos` in BigQuery)<br/>"
+        "• <b>Schritt 4 (dbt Star-Schema & Quality Gates ausführen):</b><br/>"
+        "  <code>.\\run_dbt.ps1 snapshot; .\\run_dbt.ps1 run; .\\run_dbt.ps1 test</code><br/>"
+        "• <b>Schritt 5 (Serverless Cloud Workflow triggern):</b><br/>"
+        "  <code>.\\run_workflow.ps1</code> (Führt serverlose Faktentabellen-Aktualisierung & Quality Gate in GCP aus)",
         s['body']
     ))
     story.append(PageBreak())
@@ -1513,6 +1545,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 14: INTERVIEW MASTERCLASS & TECHNICAL DEFENSE
     # =========================================================================
+    story.extend(track(14))
     story.append(Paragraph("14. Data Engineering Interview Masterclass & Defense", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1664,6 +1697,7 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
     # =========================================================================
     # KAPITEL 15: FINOPS, KOSTEN-ENGINEERING & KAPAZITÄTSPLANUNG
     # =========================================================================
+    story.extend(track(15))
     story.append(Paragraph("15. FinOps, Kosten-Engineering & Kapazitätsplanung", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
@@ -1752,9 +1786,42 @@ def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertori
         s['body']
     ))
 
-    # Dokument generieren
-    doc.build(story, canvasmaker=NumberedCanvas)
-    print(f"PDF erfolgreich generiert: {filename}")
+    return story
+
+
+def build_pdf(filename="docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf"):
+    s = get_document_styles()
+
+    # PASS 1: Dynamische Ermittlung der exakten Kapitel-Seitenzahlen
+    tracker_dict = {}
+    pass1_story = generate_story(s, chapter_pages=None, tracker_dict=tracker_dict)
+    mem_buffer = io.BytesIO()
+    doc_pass1 = SimpleDocTemplate(
+        mem_buffer,
+        pagesize=A4,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=54,
+        bottomMargin=54
+    )
+    doc_pass1.build(pass1_story, canvasmaker=NumberedCanvas)
+
+    print("Pass 1 abgeschlossen. Exakt ermittelte Kapitel-Seitenzahlen:")
+    for ch_id in sorted(tracker_dict.keys()):
+        print(f"  Kapitel {ch_id:2d}: Seite {tracker_dict[ch_id]}")
+
+    # PASS 2: Finales Dokument mit exakt abgestimmtem Inhaltsverzeichnis
+    pass2_story = generate_story(s, chapter_pages=tracker_dict, tracker_dict=None)
+    doc_pass2 = SimpleDocTemplate(
+        filename,
+        pagesize=A4,
+        leftMargin=50,
+        rightMargin=50,
+        topMargin=54,
+        bottomMargin=54
+    )
+    doc_pass2.build(pass2_story, canvasmaker=NumberedCanvas)
+    print(f"PDF erfolgreich mit 100% konsistentem Inhaltsverzeichnis generiert: {filename}")
 
 
 if __name__ == "__main__":
