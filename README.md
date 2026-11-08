@@ -8,6 +8,7 @@
 [![Apache Airflow](https://img.shields.io/badge/Orchestration-Apache%20Airflow%202.9-017CEE?logo=apacheairflow)](https://airflow.apache.org/)
 [![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-E6522C?logo=prometheus)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Observability-Grafana-F46800?logo=grafana)](https://grafana.com/)
+[![Terraform](https://img.shields.io/badge/IaC-Terraform%201.17-844FBA?logo=terraform)](https://www.terraform.io/)
 [![Docker](https://img.shields.io/badge/Infrastructure-Docker%20Compose-2496ED?logo=docker)](https://www.docker.com/)
 
 An enterprise-grade, containerized **End-to-End DataOps & Analytics Platform** built around the YouTube Trending Videos dataset. 
@@ -206,7 +207,22 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 2: Kafka Streaming starten & Daten einspeisen
+### Schritt 2: Cloud-Infrastruktur mit Terraform bereitstellen
+Mit Terraform werden die benötigten Cloud-Ressourcen (GCS Lakehouse Bucket, BigQuery Dataset, Pub/Sub Streaming Topics) deklarativ ausgerollt:
+```powershell
+# 1. Terraform initialisieren & Google-Provider laden
+.\run_infra.ps1 init
+
+# 2. Vorschau der Ressourcen berechnen (Trockenübung)
+.\run_infra.ps1 plan
+
+# 3. Ressourcen in Google Cloud anlegen (mit 'yes' bestätigen)
+.\run_infra.ps1 apply
+```
+
+---
+
+### Schritt 3: Kafka Streaming starten & Daten einspeisen
 ```powershell
 # 1. Kafka Broker & Kafka-UI im Hintergrund starten
 .\start_kafka.ps1
@@ -222,7 +238,7 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 3: Silver-Transformation mit Apache Iceberg ausführen
+### Schritt 4: Silver-Transformation mit Apache Iceberg ausführen
 ```powershell
 .\run_silver.ps1
 ```
@@ -232,7 +248,7 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 4: Daten nach Google BigQuery übertragen
+### Schritt 5: Daten nach Google BigQuery übertragen
 ```powershell
 .\load_to_bigquery.ps1
 ```
@@ -240,7 +256,7 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 5: dbt Star-Schema, SCD-2 & Quality Gate ausführen
+### Schritt 6: dbt Star-Schema, SCD-2 & Quality Gate ausführen
 Für dbt steht das universelle Runner-Skript [`run_dbt.ps1`](run_dbt.ps1) bereit:
 
 ```powershell
@@ -285,6 +301,10 @@ DE_Capstone_2026/
 │           ├── dim_date.sql              # 🟢 [v2.0 Active] Vorberechnete Datumsdimension
 │           ├── fact_video_metrics.sql    # 🟢 [v2.0 Active] Faktentabelle mit täglichen Interaktionsmetriken
 │           └── schema.yml                # 🟢 [v2.0 Active] ⭐ Quality Gate (15 automatisierte dbt Tests)
+├── infra/                                # 🟢 [v2.0 Active] ⭐ Infrastructure as Code (Terraform)
+│   ├── versions.tf                       # 🟢 [v2.0 Active] Terraform & Google Provider Konfiguration
+│   ├── variables.tf                      # 🟢 [v2.0 Active] Parameter (project_id, region, location)
+│   └── main.tf                           # 🟢 [v2.0 Active] Deklaration von GCS Bucket, BigQuery & Pub/Sub
 ├── docker/                               # Modulare Docker Compose Konfigurationen
 │   ├── docker-compose-kafka.yml          # 🟢 [v2.0 Active] Apache Kafka KRaft & Kafka-UI
 │   ├── docker-compose-spark.yml          # 🟢 [v2.0 Active] Ephemerer PySpark Compute Container
@@ -305,6 +325,7 @@ DE_Capstone_2026/
 ├── run_silver.ps1                        # 🟢 [v2.0 Active] Runner: PySpark Apache Iceberg Job
 ├── run_gold.ps1                          # 🟡 [v1.0 Legacy] Runner: Altes Spark-Gold (abgelöst durch run_dbt.ps1)
 ├── run_dbt.ps1                           # 🟢 [v2.0 Active] Runner: dbt CLI Steuerung (debug, run, snapshot, test)
+├── run_infra.ps1                         # 🟢 [v2.0 Active] Runner: Terraform CLI Steuerung (init, plan, apply, destroy)
 ├── load_to_bigquery.ps1                  # 🟢 [v2.0 Active] Runner: Google BigQuery Cloud Ingestion
 ├── start_kafka.ps1                       # 🟢 [v2.0 Active] Runner: Start Apache Kafka & Kafka-UI
 ├── stop_kafka.ps1                        # 🟢 [v2.0 Active] Runner: Stopp Apache Kafka & Kafka-UI

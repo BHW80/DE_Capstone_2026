@@ -41,3 +41,16 @@ dbt/dbt_packages/
 dbt/logs/
 dbt/.user.yml
 
+# Terraform Binaries, Local State & Cache
+*.exe
+terraform/
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+
