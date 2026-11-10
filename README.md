@@ -17,7 +17,7 @@ Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattf
 Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über sechs streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0` -> `v3.0.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)**, **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)** sowie **Enterprise Data Governance, Multi-Source End-to-End Lineage (13 Knoten) & Quality Catalog via LinkedIn/Acryl DataHub (`v3.0.0`)**.
 
 > 📘 **Architektur-Handbuch & Technisches Repertorium (On-Demand Generator):**  
-> Die tiefgehende 39-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** kann bei Bedarf lokal über `python src/generate_repertorium_pdf.py` als PDF kompiliert werden.
+> Die tiefgehende 39-seitige Enterprise-Dokumentation inkl. Prozessvergleichen (`v1.0` bis `v2.1`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** kann bei Bedarf lokal über `python src/generate_repertorium_pdf.py` als PDF kompiliert werden (das generierte PDF `docs/*.pdf` wird bewusst via `.gitignore` aus dem Repository gehalten, um Binary-Bloat zu vermeiden).
 
 ---
 
@@ -627,8 +627,8 @@ DE_Capstone_2026/
 ├── data/                                   # 📁 Lokale Ausgangslage (0 lokale Parquets oder Icebergs!)
 │   ├── raw/US_category_id.json             # 🟢 [v1.0-v3.0] Statische YouTube Kategorie-Referenz (Quelle 2)
 │   └── sample/us_videos_mini_500.csv       # 🟢 [v1.0-v3.0] Kuratierte Streaming-Quelldatei (500 Events)
-├── docs/                                   # 🟢 [v3.0 Active] ⭐ Enterprise Dokumentation & Handbuch
-│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.3/v3.0] 39-seitiges Architektur-Repertorium
+├── docs/                                   # 🟢 [v3.0 Active] ⭐ Enterprise Dokumentation
+│   └── (docs/*.pdf via .gitignore)         # 💡 Lokaler On-Demand PDF-Export via python src/generate_repertorium_pdf.py
 ├── dags/                                   # 🔴 [v1.0 Legacy] Apache Airflow DAGs (abgelöst durch Cloud Workflows)
 ├── dbt/                                    # 🟢 [v2.0/v3.0 Active] ⭐ Cloud DWH Transformationen & 15 Quality Tests
 │   ├── dbt_project.yml & profiles.yml      # 🟢 [v2.0/v3.0 Active] dbt Konfiguration & BigQuery EU-Profil
