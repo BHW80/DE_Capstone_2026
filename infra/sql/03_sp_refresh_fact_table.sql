@@ -11,15 +11,19 @@ BEGIN
     dim_v.video_key,
     CAST(s.category_id AS INT64) AS category_key,
     CAST(FORMAT_DATE('%Y%m%d', s.trending_date) AS INT64) AS date_key,
+    c.contract_key,
     s.views,
     s.likes,
     s.dislikes,
     s.comment_count,
     SAFE_DIVIDE(s.likes + s.dislikes + s.comment_count, s.views) AS interaction_ratio,
+    ROUND(s.views * 0.002 * COALESCE(c.revenue_share_pct, 0.55), 2) AS estimated_creator_payout_usd,
     s._ingested_at
   FROM `cloudanalytics-514018.youtube_analytics.stg_videos` s
   INNER JOIN `cloudanalytics-514018.youtube_analytics.dim_video` dim_v
     ON s.video_id = dim_v.video_id
     AND s.trending_date >= CAST(dim_v.valid_from AS DATE)
-    AND (dim_v.valid_to IS NULL OR s.trending_date < CAST(dim_v.valid_to AS DATE));
+    AND (dim_v.valid_to IS NULL OR s.trending_date < CAST(dim_v.valid_to AS DATE))
+  LEFT JOIN `cloudanalytics-514018.youtube_analytics.dim_creator_contract` c
+    ON s.channel_title = c.channel_title;
 END;

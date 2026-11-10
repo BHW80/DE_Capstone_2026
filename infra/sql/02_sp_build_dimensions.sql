@@ -75,4 +75,25 @@ BEGIN
     valid_to,
     CASE WHEN valid_to IS NULL THEN TRUE ELSE FALSE END AS is_current
   FROM scd2_timeline;
+
+  -- 4. Conformed Dimension: dim_creator_contract (Multi-Source CRM Ingestion aus GCS)
+  CREATE OR REPLACE EXTERNAL TABLE `cloudanalytics-514018.youtube_analytics.ext_creator_contracts`
+  OPTIONS (
+    format = 'PARQUET',
+    uris = ['gs://lakehouse-youtube-cloudanalytics-514018/bronze/crm_contracts/*.parquet']
+  );
+
+  CREATE OR REPLACE TABLE `cloudanalytics-514018.youtube_analytics.dim_creator_contract` AS
+  SELECT
+    TO_HEX(MD5(channel_title)) AS contract_key,
+    contract_id,
+    channel_title,
+    partner_tier,
+    revenue_share_pct,
+    country_code,
+    account_manager,
+    contract_status,
+    SAFE.PARSE_DATE('%Y-%m-%d', signed_date) AS signed_date,
+    CURRENT_TIMESTAMP() AS _dwh_loaded_at
+  FROM `cloudanalytics-514018.youtube_analytics.ext_creator_contracts`;
 END;

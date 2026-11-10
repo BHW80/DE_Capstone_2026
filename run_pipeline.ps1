@@ -1,8 +1,11 @@
 Write-Host "=====================================================================" -ForegroundColor Cyan
-Write-Host "STARTE KOMPLETTE END-TO-END CLOUD DATAOPS PIPELINE (v2.1.0)" -ForegroundColor Cyan
+Write-Host "STARTE KOMPLETTE END-TO-END CLOUD DATAOPS PIPELINE (v2.3.0)" -ForegroundColor Cyan
 Write-Host "=====================================================================" -ForegroundColor Cyan
 
 & "$PSScriptRoot\run_pubsub_producer.ps1"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+& "$PSScriptRoot\run_extract_crm.ps1"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & "$PSScriptRoot\run_pubsub_bronze.ps1"

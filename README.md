@@ -13,24 +13,23 @@
 
 Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattform** auf Basis des Kaggle YouTube Trending Video Datensatzes.
 
-Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über vier streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie **Automated Cloud Scheduling & Observability**.
+Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über fünf streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)**.
 
 > 📘 **Vollständiges Architektur-Handbuch & Repertorium (PDF):**  
-> Die tiefgehende 35+-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für `v1.0`, `v2.0`, `v2.1` und `v2.2`, ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
+> Die tiefgehende 35+-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
 
 ---
 
-## 📦 Die vier Releases im Detail: Prozesse, Architektur & Abgrenzung
+## 📦 Die fünf Releases im Detail: Prozesse, Architektur & Abgrenzung
 
 ```
-v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2.1.0 (Serverless Cloud Core)          v2.2.0 (Enterprise Hybrid & Scheduling)
-┌───────────────────────────────┐    ┌────────────────────────────────────────┐ ┌──────────────────────────────────────┐ ┌──────────────────────────────────────────────┐
-│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Table Format (ACID)│ │ • Terraform IaC (10 GCP-Ressourcen)   │ │ • Terraform IaC (11 GCP-Ressourcen)          │
-│ • Lokale Dead Letter Queue    │───►│ • dbt SCD-2 Dimension & Snapshots      │►│ • 100% GCS Storage (0 lokale Parquets)│►│ • Hybrid Edge-to-Cloud Bridge (Kafka->PubSub)│
-│ • Ephemerer Docker PySpark    │    │ • 15 Automatisierte dbt Quality Gates  │ │ • Cloud Pub/Sub & Cloud Workflows    │ │ • Serverless Cloud Scheduler (Cron 06:00 UTC)│
-│ • Lokaler Airflow 2.9 Stack   │    │ • BigQuery Star-Schema Materialisierung│ │ • Pattern B: BigQuery Stored Procs   │ │ • Multi-Environment Readiness & Resilienz   │
-│ • Lokaler Prometheus/Grafana  │    │ • Point-in-Time Joins in Faktentabelle │ │ • Grafana Cloud Observability        │ │ • Hands-Free Zero-Touch Automation           │
-└───────────────────────────────┘    └────────────────────────────────────────┘ └──────────────────────────────────────┘ └──────────────────────────────────────────────┘
+v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Cloud)   v2.2.0 (Hybrid Bridge)      v2.3.0 (Multi-Source CRM & API)
+┌───────────────────────┐   ┌────────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐   ┌──────────────────────────────┐
+│ • Kafka KRaft (Lokal) │   │ • Iceberg V2 (ACID)    │   │ • 100% GCS Storage    │   │ • On-Prem Kafka-Bridge│   │ • MariaDB OLTP @ weltler.at  │
+│ • Dead Letter Queue   │──►│ • dbt Core SCD-2       │──►│ • Cloud Pub/Sub & WF  │──►│ • Cloud Scheduler     │──►│ • HTTPS REST API Exporter    │
+│ • PySpark Compute     │   │ • 15 dbt Data Tests    │   │ • Pattern B: Stored P.│   │ • Zero-Touch Autom.   │   │ • dim_creator_contract       │
+│ • Airflow 2.9 & Prom. │   │ • BigQuery Star-Schema │   │ • Grafana Cloud       │   │ • Multi-Env Vorber.   │   │ • estimated_creator_payout   │
+└───────────────────────┘   └────────────────────────┘   └───────────────────────┘   └───────────────────────┘   └──────────────────────────────┘
 ```
 
 ---
@@ -112,17 +111,40 @@ v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2
 
 ---
 
-## 🔍 Notwendigkeits-Matrix über alle vier Releases (`v1.0.0` vs. `v2.0.0` vs. `v2.1.0` vs. `v2.2.0`)
+### 🔹 Abschnitt 5: Release `v2.3.0` – Multi-Source Enterprise API Ingestion & Conformed Kimball Dimensions (Aktueller Standard)
 
-| Komponente / Schicht | Release `v1.0.0` (Local) | Release `v2.0.0` (Hybrid Kimball) | Release `v2.1.0` (Serverless Cloud) | Release `v2.2.0` (Enterprise Hybrid & Scheduling) **[AKTUELL]** |
-| :--- | :--- | :--- | :--- | :--- |
-| **Streaming Broker** | 🟢 Lokales Kafka | 🟢 Lokales Kafka | 🟢 Cloud Pub/Sub | 🟢 **Hybrid: Lokales Kafka + Cloud Pub/Sub via Edge Bridge** (`run_bridge.ps1`) |
-| **Lakehouse Storage** | 📁 Lokal | 📁 Lokal | ☁️ 100 % GCS Bucket | ☁️ **100 % GCS Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)** |
-| **Silver & Iceberg V2** | 🟢 PySpark flach | 🟢 PySpark Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 in GCS | 🟢 **Cloud Silver & Iceberg V2 in GCS** |
-| **Gold / DWH Modellierung** | 🟢 Spark Parquet | 🟢 dbt Core Star-Schema | 🟢 Cloud Workflows & Stored Procedures | 🟢 **Cloud Workflows & 3 BigQuery Stored Procedures** |
-| **Scheduling & Trigger** | 🟡 Manuell / Airflow | 🟡 Manuell CLI | 🟡 Manuell CLI (`run_pipeline.ps1`) | 🟢 **Automated Cloud Scheduler (Cron `0 6 * * *` täglich)** |
-| **Observability** | 🟢 Lokal Prometheus/Grafana | 🟡 Lokal Prometheus/Grafana | 🟢 Grafana Cloud / GCP Monitoring | 🟢 **Grafana Cloud & Lokales Grafana via GCP Monitoring Plugin** |
-| **Cloud IaC** | 🔴 Kein IaC | 🔴 Kein IaC | 🟢 Terraform (10 Ressourcen) | 🟢 **Terraform 1.17 (11 GCP-Ressourcen inkl. Cloud Scheduler)** |
+**Zielsetzung:** Auflösung des Single-Source-Silos! Großunternehmen führen Daten aus unterschiedlichen Quellsystemen zusammen. `v2.3.0` bindet eine externe relationale **MariaDB** (gehostet auf `www.weltler.at`) über eine gesicherte **HTTPS REST-API (Bearer Token)** an, spiegelt die Daten direkt in GCS Bronze und verheiratet die Verträge über eine **Conformed Dimension (`dim_creator_contract`)** und eine **neue Business-KPI (`estimated_creator_payout_usd`)** im BigQuery Star-Schema.
+
+* **Prozessablauf (`v2.3.0` – Multi-Source & Multi-Interval):**
+  1. **MariaDB OLTP Source & DDL Seed (`scripts/mariadb_schema_and_seed.sql`):**
+     * Hält die relationalen Creator-Stammdaten: `channel_title`, `partner_tier`, `revenue_share_pct`, `country_code`, `account_manager`, `signed_date`.
+  2. **API-Led Ingestion Pattern (`scripts/api_get_contracts.php` & `src/cloud_crm_extractor.py` / `run_extract_crm.ps1`):**
+     * **Sicherheit:** Kein offener Port 3306! Abfrage über verschlüsseltes HTTPS mit `Authorization: Bearer <TOKEN>`.
+     * **Serverless Parquet Upload:** Konvertiert die JSON-Antwort in-memory in Parquet und streamt sie direkt nach `gs://lakehouse-youtube-cloudanalytics-514018/bronze/crm_contracts/creator_contracts.parquet` (0 lokale Festplattendateien).
+  3. **BigLake External Table & Conformed Dimension (`infra/sql/02_sp_build_dimensions.sql`):**
+     * `CREATE OR REPLACE EXTERNAL TABLE ext_creator_contracts` liest die Parquet-Datei serverlos aus GCS.
+     * Materialisiert die Conformed Dimension `dim_creator_contract` mit Surrogate Hash Key (`contract_key`).
+  4. **Business-KPI & Point-in-Time Join (`infra/sql/03_sp_refresh_fact_table.sql`):**
+     * Verknüpft `fact_video_metrics` per `LEFT JOIN` mit `dim_creator_contract`.
+     * Berechnet für jedes Video die Auszahlung:  
+       `estimated_creator_payout_usd = ROUND(views * 0.002 * COALESCE(revenue_share_pct, 0.55), 2)`.
+  5. **Master Runner Integration (`run_pipeline.ps1`):**
+     * `run_extract_crm.ps1` ist als Schritt 2 fest in der End-to-End Pipeline verankert.
+
+---
+
+## 🔍 Notwendigkeits-Matrix über alle fünf Releases (`v1.0.0` bis `v2.3.0`)
+
+| Komponente / Schicht | Release `v1.0.0` (Local) | Release `v2.0.0` (Hybrid) | Release `v2.1.0` (Cloud) | Release `v2.2.0` (Hybrid & Sched.) | Release `v2.3.0` (Multi-Source CRM & API) **[AKTUELL]** |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Externe Datenquellen** | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🟢 **Multi-Source: YouTube + MariaDB via REST-API** (`run_extract_crm.ps1`) |
+| **Streaming Broker** | 🟢 Lokales Kafka | 🟢 Lokales Kafka | 🟢 Cloud Pub/Sub | 🟢 Hybrid Kafka Bridge (`run_bridge.ps1`) | 🟢 **Hybrid Kafka Bridge + Cloud Pub/Sub** |
+| **Lakehouse Storage** | 📁 Lokal | 📁 Lokal | ☁️ 100 % GCS Bucket | ☁️ 100 % GCS Bucket | ☁️ **100 % GCS (`bronze/`, `silver/`, `bronze/crm_contracts/`)** |
+| **Silver & Iceberg V2** | 🟢 PySpark flach | 🟢 PySpark Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 **Cloud Silver & Iceberg V2 in GCS** |
+| **Gold / DWH Modellierung** | 🟢 Spark Parquet | 🟢 dbt Core Star-Schema | 🟢 Cloud Workflows SPs | 🟢 Cloud Workflows SPs | 🟢 **Star-Schema mit `dim_creator_contract` & Payout-KPI** |
+| **Scheduling & Trigger** | 🟡 Manuell / Airflow | 🟡 Manuell CLI | 🟡 Manuell CLI | 🟢 Cloud Scheduler (tägl. 06:00) | 🟢 **Cloud Scheduler + End-to-End Master Pipeline** (`run_pipeline.ps1`) |
+| **Observability** | 🟢 Lokal Prometheus/Grafana | 🟡 Lokal Prometheus/Grafana | 🟢 Grafana Cloud | 🟢 Grafana Cloud & Lokal | 🟢 **Grafana Cloud & Lokales Grafana via GCP Monitoring Plugin** |
+| **Cloud IaC** | 🔴 Kein IaC | 🔴 Kein IaC | 🟢 Terraform (10 Ress.) | 🟢 Terraform (11 Ressourcen) | 🟢 **Terraform 1.17 (11 GCP-Ressourcen inkl. Cloud Scheduler & Stored Procs)** |
 
 ---
 
@@ -174,18 +196,33 @@ erDiagram
     FACT_VIDEO_METRICS }|..|| DIM_VIDEO : "joins on video_key (SCD-2)"
     FACT_VIDEO_METRICS }|..|| DIM_CATEGORY : "joins on category_key"
     FACT_VIDEO_METRICS }|..|| DIM_DATE : "joins on date_key"
+    FACT_VIDEO_METRICS }|..o| DIM_CREATOR_CONTRACT : "joins on contract_key"
 
     FACT_VIDEO_METRICS {
         string metric_key PK "MD5(video_id + trending_date)"
         string video_key FK "Surrogate Key (dbt_scd_id)"
         int category_key FK "ID der Kategorie"
         int date_key FK "Format: YYYYMMDD"
+        string contract_key FK "Surrogate Key (MD5 channel_title)"
         bigint views "Aufrufe"
         bigint likes "Likes"
         bigint dislikes "Dislikes"
         bigint comment_count "Kommentare"
         float interaction_ratio "(likes+dislikes+comments)/views"
+        float estimated_creator_payout_usd "Berechnet aus views und revenue_share"
         timestamp _ingested_at "Audit-Zeitstempel"
+    }
+
+    DIM_CREATOR_CONTRACT {
+        string contract_key PK "MD5(channel_title)"
+        int contract_id "Original-ID aus MariaDB"
+        string channel_title "Natural Key"
+        string partner_tier "Standard, Partner, Enterprise"
+        float revenue_share_pct "z.B. 0.80 fuer 80%"
+        string country_code "ISO-3"
+        string account_manager "Zustaendiger Betreuer"
+        string contract_status "ACTIVE, PENDING"
+        date signed_date "Vertragsdatum"
     }
 
     DIM_VIDEO {
