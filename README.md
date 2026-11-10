@@ -15,8 +15,8 @@ Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattf
 
 Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über fünf streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)**.
 
-> 📘 **Vollständiges Architektur-Handbuch & Repertorium (PDF):**  
-> Die tiefgehende 35+-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
+> 📘 **Architektur-Handbuch & Technisches Repertorium (On-Demand Generator):**  
+> Die tiefgehende 39-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** kann bei Bedarf lokal über `python src/generate_repertorium_pdf.py` als PDF kompiliert werden.
 
 ---
 
