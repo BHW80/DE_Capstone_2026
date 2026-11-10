@@ -148,59 +148,92 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
 
 ---
 
-## 📐 End-to-End Systemarchitektur (Release `v2.1.0` – 100 % GCS Lakehouse & Cloud Workflows)
+## 📐 End-to-End Systemarchitektur (Release `v2.3.0` – Multi-Source Cloud Lakehouse, Hybrid Bridge & Automated Workflows)
 
 ```mermaid
 flowchart TD
-    subgraph CloudStreaming ["1. Serverless Cloud Streaming & Resilienz (GCP Pub/Sub -> GCS)"]
-        RAW["data/sample/us_videos_mini_500.csv\n(Einzige lokale Quelldatei!)"] --> PROD["src/cloud_pubsub_producer.py\n(run_pubsub_producer.ps1)\n10% DLQ Injection + SCD-2 Mutation"]
-        PROD -->|439 Clean Events| PS_INGEST["GCP Pub/Sub Topic\n(topic-youtube-ingest)"]
-        PROD -->|61 Corrupt Events| PS_DLQ["GCP Pub/Sub Topic\n(topic-youtube-dlq)"]
+    subgraph MultiSourceIngest ["1. Multi-Source Streaming & REST-API Ingestion (Hybrid Edge + SaaS CRM)"]
+        subgraph OnPrem ["On-Premises Edge"]
+            KAFKA["Apache Kafka KRaft\n(127.0.0.1:9092)"] -->|topic_ingest & topic_err| BRIDGE["src/bridge_kafka_to_pubsub.py\n(run_bridge.ps1)"]
+        end
+
+        subgraph CloudProd ["Serverless Cloud Producer"]
+            RAW_CSV["data/sample/us_videos_mini_500.csv\n(Lokale Quelldatei)"] --> PROD["src/cloud_pubsub_producer.py\n(run_pubsub_producer.ps1)\n10% DLQ Injection + SCD-2 Mutation"]
+        end
+
+        subgraph CRM_Source ["Externe SaaS/OLTP Quelle"]
+            MARIADB[("MariaDB OLTP @ weltler.at\n(usrdb_welbmqup.creator_contracts)")] -->|HTTPS REST-API\nBearer Token| CRM_EXTRACT["src/cloud_crm_extractor.py\n(run_extract_crm.ps1)"]
+        end
+
+        BRIDGE -->|HTTPS/OAuth2 Mirroring| PS_INGEST["GCP Pub/Sub Topic\n(topic-youtube-ingest)"]
+        BRIDGE -->|HTTPS/OAuth2 Mirroring| PS_DLQ["GCP Pub/Sub Topic\n(topic-youtube-dlq)"]
+        PROD -->|Clean Events| PS_INGEST
+        PROD -->|Corrupt Events| PS_DLQ
+    end
+
+    subgraph GCSLakehouse ["2. Cloud Lakehouse & Apache Iceberg V2 auf GCS (0 lokale Parquets!)"]
         PS_INGEST --> SUB_I["Subscription: sub-youtube-ingest"]
         PS_DLQ --> SUB_D["Subscription: sub-youtube-dlq"]
         SUB_I --> BRONZE_C["src/cloud_pubsub_consumer_bronze.py\n(run_pubsub_bronze.ps1)"]
         SUB_D --> DLQ_C["src/cloud_pubsub_consumer_dlq.py\n(run_pubsub_dlq.ps1)"]
-        BRONZE_C -->|In-Memory Upload| GCS_B[("☁️ gs://lakehouse-youtube-.../bronze/\n(Bronze Parquet in GCS)")]
-        DLQ_C -->|In-Memory Upload| GCS_Q[("☁️ gs://lakehouse-youtube-.../quarantine/\n(DLQ Parquet in GCS)")]
-    end
+        
+        BRONZE_C -->|In-Memory Upload| GCS_B[("☁️ gs://.../bronze/\n(Bronze Parquet in GCS)")]
+        DLQ_C -->|In-Memory Upload| GCS_Q[("☁️ gs://.../quarantine/\n(DLQ Parquet in GCS)")]
+        CRM_EXTRACT -->|In-Memory Upload| GCS_CRM[("☁️ gs://.../bronze/crm_contracts/\n(creator_contracts.parquet)")]
 
-    subgraph GCSLakehouse ["2. Cloud Lakehouse & Apache Iceberg V2 auf GCS (0 lokale Parquets!)"]
         GCS_B --> SILVER_JOB["src/cloud_silver_gcs.py\n(run_silver.ps1)"]
         CAT_JSON["data/raw/US_category_id.json"] -->|Category Mapping| SILVER_JOB
-        SILVER_JOB --> GCS_ICE[("🧊 gs://lakehouse-youtube-.../iceberg_warehouse/\nApache Iceberg V2 Table (Metadata & Data)")]
-        SILVER_JOB --> GCS_S[("☁️ gs://lakehouse-youtube-.../silver/\nsilver_videos.parquet")]
+        SILVER_JOB --> GCS_ICE[("🧊 gs://.../iceberg_warehouse/\nApache Iceberg V2 Table (Metadata & Data)")]
+        SILVER_JOB --> GCS_S[("☁️ gs://.../silver/\nsilver_videos.parquet")]
     end
 
-    subgraph CloudWorkflowDWH ["3. Full End-to-End Google Cloud Workflow & BigQuery Star-Schema"]
-        WORKFLOW["Google Cloud Workflow: youtube-dataops-pipeline\n(run_workflow.ps1 / infra/workflows/pipeline.yaml)"]
+    subgraph CloudWorkflowDWH ["3. Automated Scheduling, Cloud Workflows & BigQuery Star-Schema"]
+        SCHEDULER["Google Cloud Scheduler: schedule-youtube-dataops-pipeline\n(Täglich 06:00 Europe/Berlin - 0,00 € Free Tier)"]
+        SCHEDULER -->|OIDC Trigger| WORKFLOW["Google Cloud Workflow: youtube-dataops-pipeline\n(run_workflow.ps1 / infra/workflows/pipeline.yaml)"]
+        
         GCS_S -->|Step 1: LOAD DATA OVERWRITE| BQ_RAW[("BigQuery: silver_videos")]
-        WORKFLOW -->|Orchestriert Step 1| BQ_RAW
-        WORKFLOW -->|Step 3: Deduplicated View| DBT_STG["BigQuery View: stg_videos"]
-        WORKFLOW -->|Step 4 & 5: Conformed Dims| DIM_CD["BigQuery Tables:\ndim_category & dim_date"]
-        WORKFLOW -->|Step 6: SCD-2 Timeline| DIM_V["BigQuery Table: dim_video\n(SCD-2: 3 Versionen fuer 2kyS6SvSYSE)"]
-        WORKFLOW -->|Step 7: Point-in-Time Join| FACT["BigQuery Table:\nfact_video_metrics"]
-        WORKFLOW -->|Step 8: Quality Gate| Q_CHECK{"Orphan Keys == 0 &\n15 dbt Tests PASS?"}
+        WORKFLOW -->|Step 1: Orchestriert Load| BQ_RAW
+        WORKFLOW -->|Step 3: CALL sp_build_stg_videos| DBT_STG["BigQuery View: stg_videos"]
+        
+        GCS_CRM -.->|BigLake External Table| EXT_CRM["BigQuery: ext_creator_contracts"]
+        WORKFLOW -->|Step 4: CALL sp_build_dimensions| EXT_CRM
+        EXT_CRM --> DIM_CRM["BigQuery Table: dim_creator_contract\n(Conformed CRM Dimension)"]
+        WORKFLOW -->|Step 4: CALL sp_build_dimensions| DIM_CD["BigQuery Tables:\ndim_category & dim_date"]
+        WORKFLOW -->|Step 4: CALL sp_build_dimensions| DIM_V["BigQuery Table: dim_video\n(SCD-2: 3 Versionen für 2kyS6SvSYSE)"]
+        
+        WORKFLOW -->|Step 5: CALL sp_refresh_fact_table| FACT["BigQuery Table: fact_video_metrics\n(Point-in-Time SCD-2 Join +\nestimated_creator_payout_usd)"]
+        DIM_V --> FACT
+        DIM_CD --> FACT
+        DIM_CRM --> FACT
+        
+        WORKFLOW -->|Step 6: Quality Gate| Q_CHECK{"Orphan Keys == 0 &\n15 dbt Tests PASS?"}
         Q_CHECK -->|Pass| SUCCESS["Workflow SUCCEEDED"]
         Q_CHECK -->|Fail| RAISE["Raise Pipeline Error"]
         
-        GCP_MON["Google Cloud Monitoring\n(Workflows + BigQuery + Pub/Sub)"] -.->|Weg 1: Serverless| GRAFANA["Grafana Cloud Dashboard\n(dashboards/youtube_dataops_monitoring.json)"]
+        GCP_MON["Google Cloud Monitoring\n(Workflows + BigQuery + Pub/Sub + Scheduler)"] -.->|Serverless| GRAFANA["Grafana Cloud Dashboard\n(dashboards/youtube_dataops_monitoring.json)"]
     end
 ```
 
 ---
 
-## 🏛️ Das Kimball Star-Schema (Data Warehouse)
+## 🏛️ Das Kimball Star-Schema (Release `v2.3.0` – Multi-Source Enterprise DWH)
+
+Im Release `v2.3.0` wird das Star-Schema vom reinen YouTube-Silo zu einem **Multi-Source Enterprise Data Warehouse** ausgebaut:
+* **Geschäftsprozess & Fakten-Granularität (Grain):** Exakt 1 Zeile pro YouTube-Video pro Trending-Tag (`metric_key = MD5(video_id + trending_date)`).
+* **Point-in-Time SCD-2 Join:** Die Faktentabelle verbindet sich über `video_key` atomar mit der zum `trending_date` gültigen Version der `dim_video`.
+* **Multi-Source Conformed Dimension:** `dim_creator_contract` führt Stammdaten und Vergütungsmodelle aus einer externen **MariaDB CRM-Datenbank** über die Conformed Natural Key Spalte `channel_title` zusammen.
+* **Erweiterte Business-KPI:** `estimated_creator_payout_usd` monetarisiert die Performance über die vertraglichen Konditionen (`views * 0.002 * revenue_share_pct`).
 
 ```mermaid
 erDiagram
     FACT_VIDEO_METRICS }|..|| DIM_VIDEO : "joins on video_key (SCD-2)"
     FACT_VIDEO_METRICS }|..|| DIM_CATEGORY : "joins on category_key"
     FACT_VIDEO_METRICS }|..|| DIM_DATE : "joins on date_key"
-    FACT_VIDEO_METRICS }|..o| DIM_CREATOR_CONTRACT : "joins on contract_key"
+    FACT_VIDEO_METRICS }|..o| DIM_CREATOR_CONTRACT : "joins on contract_key (Multi-Source CRM)"
 
     FACT_VIDEO_METRICS {
         string metric_key PK "MD5(video_id + trending_date)"
-        string video_key FK "Surrogate Key (dbt_scd_id)"
+        string video_key FK "Surrogate Key (dbt_scd_id Point-in-Time)"
         int category_key FK "ID der Kategorie"
         int date_key FK "Format: YYYYMMDD"
         string contract_key FK "Surrogate Key (MD5 channel_title)"
@@ -209,32 +242,32 @@ erDiagram
         bigint dislikes "Dislikes"
         bigint comment_count "Kommentare"
         float interaction_ratio "(likes+dislikes+comments)/views"
-        float estimated_creator_payout_usd "Berechnet aus views und revenue_share"
+        float estimated_creator_payout_usd "ROUND(views * 0.002 * COALESCE(share, 0.55), 2)"
         timestamp _ingested_at "Audit-Zeitstempel"
     }
 
     DIM_CREATOR_CONTRACT {
-        string contract_key PK "MD5(channel_title)"
-        int contract_id "Original-ID aus MariaDB"
-        string channel_title "Natural Key"
+        string contract_key PK "Surrogate Key: MD5(channel_title)"
+        int contract_id "Original-ID aus MariaDB OLTP"
+        string channel_title "Natural Key (Join zu Videos)"
         string partner_tier "Standard, Partner, Enterprise"
-        float revenue_share_pct "z.B. 0.80 fuer 80%"
-        string country_code "ISO-3"
-        string account_manager "Zustaendiger Betreuer"
+        float revenue_share_pct "z.B. 0.80 für 80% Creator-Anteil"
+        string country_code "ISO-3 Quell-Ländercode"
+        string account_manager "Zuständiger Betreuer"
         string contract_status "ACTIVE, PENDING"
-        date signed_date "Vertragsdatum"
+        date signed_date "Vertragsabschlussdatum"
     }
 
     DIM_VIDEO {
         string video_key PK "Surrogate Hash (dbt_scd_id)"
         string video_id "Natural Key"
-        string title "SCD-2 überwacht"
+        string title "SCD-2 überwacht (historisiert)"
         string channel_title "Kanalname"
         int category_id "Kategorie ID"
         string tags "Tags"
-        timestamp valid_from "Gültig ab"
+        timestamp valid_from "Gültig ab (LEAD Window Function)"
         timestamp valid_to "Gültig bis (NULL wenn aktuell)"
-        boolean is_current "Flag: Aktuelle Version?"
+        boolean is_current "Flag: Aktuell gültige Version?"
     }
 
     DIM_CATEGORY {
