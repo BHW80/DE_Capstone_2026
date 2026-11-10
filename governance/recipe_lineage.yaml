@@ -1,0 +1,13 @@
+# DataHub Ingestion Recipe: End-to-End Pipeline Lineage
+# Schreibt die vollstaendige Multi-Source Lineage atomar und dauerhaft in DataHub
+
+source:
+  type: datahub-lineage-file
+  config:
+    file: "./governance/pipeline_lineage.yaml"
+    preserve_upstream: false
+
+sink:
+  type: datahub-rest
+  config:
+    server: "http://localhost:8080"

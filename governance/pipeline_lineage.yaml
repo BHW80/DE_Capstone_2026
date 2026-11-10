@@ -1,0 +1,142 @@
+version: "1"
+lineage:
+  # =========================================================================
+  # ROOT ENTITIES (Quellsysteme materiell in DataHub registrieren)
+  # =========================================================================
+
+  # Root 1: On-Premises Apache Kafka Topic
+  - entity:
+      name: "topic_ingest"
+      type: "dataset"
+      platform: "kafka"
+    upstream: []
+
+  # Root 2: Externe MariaDB OLTP Datenbank @ weltler.at (MySQL-kompatible Plattform)
+  - entity:
+      name: "usrdb_welbmqup.creator_contracts"
+      type: "dataset"
+      platform: "mysql"
+    upstream: []
+
+  # Root 3: Lokale JSON-Referenzdaten fuer Video-Kategorien
+  - entity:
+      name: "data/raw/US_category_id.json"
+      type: "dataset"
+      platform: "file"
+    upstream: []
+
+  # =========================================================================
+  # STRANG 1: Streaming-Pfad (Kafka -> Pub/Sub -> GCS Bronze -> GCS Silver -> BigQuery)
+  # =========================================================================
+
+  # Hop 1: Kafka -> Google Cloud Pub/Sub
+  - entity:
+      name: "topic-youtube-ingest"
+      type: "dataset"
+      platform: "pubsub"
+    upstream:
+      - entity:
+          name: "topic_ingest"
+          type: "dataset"
+          platform: "kafka"
+
+  # Hop 2: Cloud Pub/Sub -> GCS Lakehouse Bronze
+  - entity:
+      name: "lakehouse-youtube-cloudanalytics-514018/bronze"
+      type: "dataset"
+      platform: "gcs"
+    upstream:
+      - entity:
+          name: "topic-youtube-ingest"
+          type: "dataset"
+          platform: "pubsub"
+
+  # Hop 3: GCS Bronze + JSON Reference -> GCS Silver Parquet & Iceberg V2
+  - entity:
+      name: "lakehouse-youtube-cloudanalytics-514018/silver"
+      type: "dataset"
+      platform: "gcs"
+    upstream:
+      - entity:
+          name: "lakehouse-youtube-cloudanalytics-514018/bronze"
+          type: "dataset"
+          platform: "gcs"
+      - entity:
+          name: "data/raw/US_category_id.json"
+          type: "dataset"
+          platform: "file"
+
+  # Hop 4: GCS Silver -> BigQuery silver_videos (hier dockt dbt automatisch an!)
+  - entity:
+      name: "cloudanalytics-514018.youtube_analytics.silver_videos"
+      type: "dataset"
+      platform: "bigquery"
+    upstream:
+      - entity:
+          name: "lakehouse-youtube-cloudanalytics-514018/silver"
+          type: "dataset"
+          platform: "gcs"
+
+  # =========================================================================
+  # STRANG 2: CRM-Pfad (MariaDB -> GCS CRM -> BigLake External -> Dim -> Fact)
+  # =========================================================================
+
+  # Hop 5: MariaDB OLTP @ weltler.at -> GCS Bronze CRM Parquet
+  - entity:
+      name: "lakehouse-youtube-cloudanalytics-514018/bronze/crm_contracts"
+      type: "dataset"
+      platform: "gcs"
+    upstream:
+      - entity:
+          name: "usrdb_welbmqup.creator_contracts"
+          type: "dataset"
+          platform: "mysql"
+
+  # Hop 6: GCS CRM Parquet -> BigQuery BigLake External Table (ext_creator_contracts)
+  - entity:
+      name: "cloudanalytics-514018.youtube_analytics.ext_creator_contracts"
+      type: "dataset"
+      platform: "bigquery"
+    upstream:
+      - entity:
+          name: "lakehouse-youtube-cloudanalytics-514018/bronze/crm_contracts"
+          type: "dataset"
+          platform: "gcs"
+
+  # Hop 7: BigLake External Table -> Conformed Dimension (dim_creator_contract)
+  - entity:
+      name: "cloudanalytics-514018.youtube_analytics.dim_creator_contract"
+      type: "dataset"
+      platform: "bigquery"
+    upstream:
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.ext_creator_contracts"
+          type: "dataset"
+          platform: "bigquery"
+
+  # Hop 8: Die Faktentabelle vereint ALLE Straenge:
+  - entity:
+      name: "cloudanalytics-514018.youtube_analytics.fact_video_metrics"
+      type: "dataset"
+      platform: "bigquery"
+    upstream:
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.dim_creator_contract"
+          type: "dataset"
+          platform: "bigquery"
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.dim_video"
+          type: "dataset"
+          platform: "bigquery"
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.dim_category"
+          type: "dataset"
+          platform: "bigquery"
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.dim_date"
+          type: "dataset"
+          platform: "bigquery"
+      - entity:
+          name: "cloudanalytics-514018.youtube_analytics.stg_videos"
+          type: "dataset"
+          platform: "bigquery"

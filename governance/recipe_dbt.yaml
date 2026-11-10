@@ -1,0 +1,16 @@
+# DataHub Ingestion Recipe: dbt Core Star-Schema & Quality Tests
+# Liest lokale dbt-Artefakte (manifest.json & run_results.json) ein
+# und schickt Lineage, Schema & Test-Assertions an DataHub GMS (Port 8080).
+
+source:
+  type: dbt
+  config:
+    manifest_path: "./dbt/target/manifest.json"
+    run_results_paths:
+      - "./dbt/target/run_results.json"
+    target_platform: "bigquery"
+
+sink:
+  type: datahub-rest
+  config:
+    server: "http://localhost:8080"

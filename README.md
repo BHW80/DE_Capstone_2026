@@ -6,6 +6,7 @@
 [![Apache Iceberg](https://img.shields.io/badge/Table%20Format-Apache%20Iceberg%20V2-00758F?logo=apache)](https://iceberg.apache.org/)
 [![dbt Core](https://img.shields.io/badge/Transform-dbt%20Core%201.13-FF694B?logo=dbt)](https://www.getdbt.com/)
 [![Google BigQuery](https://img.shields.io/badge/Cloud%20Warehouse-Google%20BigQuery-4285F4?logo=googlecloud)](https://cloud.google.com/bigquery)
+[![DataHub](https://img.shields.io/badge/Governance-DataHub%20v0.13-7C3AED?logo=apache)](https://datahubproject.io/)
 [![Google Cloud Workflows](https://img.shields.io/badge/Orchestration-Google%20Cloud%20Workflows-4285F4?logo=googlecloud)](https://cloud.google.com/workflows)
 [![Grafana Cloud](https://img.shields.io/badge/Observability-Grafana%20Cloud-F46800?logo=grafana)](https://grafana.com/)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%201.17-844FBA?logo=terraform)](https://www.terraform.io/)
@@ -13,23 +14,23 @@
 
 Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattform** auf Basis des Kaggle YouTube Trending Video Datensatzes.
 
-Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über fünf streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)**.
+Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über sechs streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0` -> `v3.0.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)**, **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)** sowie **Enterprise Data Governance, Multi-Source End-to-End Lineage & Quality Catalog via LinkedIn/Acryl DataHub (`v3.0.0`)**.
 
 > 📘 **Architektur-Handbuch & Technisches Repertorium (On-Demand Generator):**  
 > Die tiefgehende 39-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** kann bei Bedarf lokal über `python src/generate_repertorium_pdf.py` als PDF kompiliert werden.
 
 ---
 
-## 📦 Die fünf Releases im Detail: Prozesse, Architektur & Abgrenzung
+## 📦 Die sechs Releases im Detail: Prozesse, Architektur & Abgrenzung
 
 ```
-v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Cloud)   v2.2.0 (Hybrid Bridge)      v2.3.0 (Multi-Source CRM & API)
-┌───────────────────────┐   ┌────────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐   ┌──────────────────────────────┐
-│ • Kafka KRaft (Lokal) │   │ • Iceberg V2 (ACID)    │   │ • 100% GCS Storage    │   │ • On-Prem Kafka-Bridge│   │ • MariaDB OLTP @ weltler.at  │
-│ • Dead Letter Queue   │──►│ • dbt Core SCD-2       │──►│ • Cloud Pub/Sub & WF  │──►│ • Cloud Scheduler     │──►│ • HTTPS REST API Exporter    │
-│ • PySpark Compute     │   │ • 15 dbt Data Tests    │   │ • Pattern B: Stored P.│   │ • Zero-Touch Autom.   │   │ • dim_creator_contract       │
-│ • Airflow 2.9 & Prom. │   │ • BigQuery Star-Schema │   │ • Grafana Cloud       │   │ • Multi-Env Vorber.   │   │ • estimated_creator_payout   │
-└───────────────────────┘   └────────────────────────┘   └───────────────────────┘   └───────────────────────┘   └──────────────────────────────┘
+v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Cloud)   v2.2.0 (Hybrid Bridge)      v2.3.0 (Multi-Source CRM)   v3.0.0 (Data Governance)
+┌───────────────────────┐   ┌────────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐   ┌─────────────────────────┐ ┌─────────────────────────────┐
+│ • Kafka KRaft (Lokal) │   │ • Iceberg V2 (ACID)    │   │ • 100% GCS Storage    │   │ • On-Prem Kafka-Bridge│   │ • MariaDB OLTP @ weltler│ │ • DataHub Data Governance   │
+│ • Dead Letter Queue   │──►│ • dbt Core SCD-2       │──►│ • Cloud Pub/Sub & WF  │──►│ • Cloud Scheduler     │──►│ • HTTPS REST API Export │─► • Multi-Source Lineage(13K)│
+│ • PySpark Compute     │   │ • 15 dbt Data Tests    │   │ • Pattern B: Stored P.│   │ • Zero-Touch Autom.   │   │ • dim_creator_contract  │ │ • 15 dbt Test Assertions  │
+│ • Airflow 2.9 & Prom. │   │ • BigQuery Star-Schema │   │ • Grafana Cloud       │   │ • Multi-Env Vorber.   │   │ • estimated_payout_usd  │ │ • Quality & Schema Catalog│
+└───────────────────────┘   └────────────────────────┘   └───────────────────────┘   └───────────────────────┘   └─────────────────────────┘ └─────────────────────────────┘
 ```
 
 ---
@@ -133,18 +134,43 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
 
 ---
 
-## 🔍 Notwendigkeits-Matrix über alle fünf Releases (`v1.0.0` bis `v2.3.0`)
+### 🔹 Abschnitt 6: Release `v3.0.0` – Enterprise Data Governance, Multi-Source Lineage & Quality Catalog (DataHub Edition) **[AKTUELL]**
 
-| Komponente / Schicht | Release `v1.0.0` (Local) | Release `v2.0.0` (Hybrid) | Release `v2.1.0` (Cloud) | Release `v2.2.0` (Hybrid & Sched.) | Release `v2.3.0` (Multi-Source CRM & API) **[AKTUELL]** |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Externe Datenquellen** | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🟢 **Multi-Source: YouTube + MariaDB via REST-API** (`run_extract_crm.ps1`) |
-| **Streaming Broker** | 🟢 Lokales Kafka | 🟢 Lokales Kafka | 🟢 Cloud Pub/Sub | 🟢 Hybrid Kafka Bridge (`run_bridge.ps1`) | 🟢 **Hybrid Kafka Bridge + Cloud Pub/Sub** |
-| **Lakehouse Storage** | 📁 Lokal | 📁 Lokal | ☁️ 100 % GCS Bucket | ☁️ 100 % GCS Bucket | ☁️ **100 % GCS (`bronze/`, `silver/`, `bronze/crm_contracts/`)** |
-| **Silver & Iceberg V2** | 🟢 PySpark flach | 🟢 PySpark Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 **Cloud Silver & Iceberg V2 in GCS** |
-| **Gold / DWH Modellierung** | 🟢 Spark Parquet | 🟢 dbt Core Star-Schema | 🟢 Cloud Workflows SPs | 🟢 Cloud Workflows SPs | 🟢 **Star-Schema mit `dim_creator_contract` & Payout-KPI** |
-| **Scheduling & Trigger** | 🟡 Manuell / Airflow | 🟡 Manuell CLI | 🟡 Manuell CLI | 🟢 Cloud Scheduler (tägl. 06:00) | 🟢 **Cloud Scheduler + End-to-End Master Pipeline** (`run_pipeline.ps1`) |
-| **Observability** | 🟢 Lokal Prometheus/Grafana | 🟡 Lokal Prometheus/Grafana | 🟢 Grafana Cloud | 🟢 Grafana Cloud & Lokal | 🟢 **Grafana Cloud & Lokales Grafana via GCP Monitoring Plugin** |
-| **Cloud IaC** | 🔴 Kein IaC | 🔴 Kein IaC | 🟢 Terraform (10 Ress.) | 🟢 Terraform (11 Ressourcen) | 🟢 **Terraform 1.17 (11 GCP-Ressourcen inkl. Cloud Scheduler & Stored Procs)** |
+**Zielsetzung:** Echte Enterprise-Transparenz, Data Governance, automatisierte Qualitätskataloge und vollständige Auditierbarkeit! Großunternehmen fordern heute lückenlose Nachvollziehbarkeit: *Woher stammt ein Datenpunkt in der Faktentabelle? Welcher Transformation unterlag er? Welche Tests haben ihn freigegeben?*  
+Release `v3.0.0` integriert **LinkedIn/Acryl DataHub** als zentrales Enterprise Governance Portal und schlägt die Brücke über alle 3 Quellwelten und alle 13 Knoten des hybriden Medallion Lakehouses.
+
+* **Prozessablauf & Governance Highlights (`v3.0.0`):**
+  1. **Multi-Source End-to-End Lineage über alle drei Quellwelten (13 Knoten):**
+     DataHub visualisiert die lückenlose Kette von den originären Quellen bis zur BI-Faktentabelle:
+     * **Quelle 1 (Edge Streaming):** On-Premises Apache Kafka (`topic_ingest`) ➔ Cloud Pub/Sub ➔ GCS Bronze Parquet.
+     * **Quelle 2 (Referenz-Metadaten):** `data/raw/US_category_id.json` (Category Dictionary) ➔ Zero-Shuffle Join in GCS Silver & Conformed Dimension `dim_category`.
+     * **Quelle 3 (SaaS OLTP CRM):** MariaDB @ weltler.at (`usrdb_welbmqup.creator_contracts`) ➔ HTTPS REST-API ➔ GCS Bronze CRM Parquet ➔ BigLake External Table (`ext_creator_contracts`) ➔ Conformed Dimension `dim_creator_contract`.
+     * **DWH Marts & Kimball Fact:** Alle vier Dimensionen (`dim_video` SCD-2, `dim_category`, `dim_date`, `dim_creator_contract`) und Staging fließen über das **dbt Core Transformationsmodell** direkt in die zentrale Faktentabelle **`fact_video_metrics`** (mit Payout-KPI).
+  2. **Automated Quality Gate Catalog (15 dbt Assertions in DataHub):**
+     * `governance/recipe_dbt.yaml` konsumiert die dbt-Artefakte (`manifest.json` und `run_results.json`).
+     * Alle **15 automatisierten dbt Data Tests** (Unique Keys, Not-Null Constraints, referenzielle Fremdschlüssel-Beziehungen zu Dimensionen) werden in DataHub als **grüne Governance-Quality-Assertions** mit vollständiger Ausführungshistorie und Fehlerrate registriert.
+  3. **Deterministischer Multi-Source Emitter (`governance/emit_full_lineage.py`):**
+     * Nutzt das offizielle `DataHubRestEmitter` SDK (`MetadataChangeProposalWrapper`), um alle 13 Knoten deterministisch und unabhängig von Einzellauf-Zuständen atomar mit GMS (Port 8080) zu verdrahten.
+     * Registriert Plattform-Typen (`kafka`, `mysql`, `file`, `pubsub`, `gcs`, `bigquery`, `dbt`), Tabellen-Beschreibungen und benutzerdefinierte Metadaten.
+  4. **DataHub UI Quickstart & Governance Cockpit (`http://localhost:9002`):**
+     * **Lineage Explorer:** Interaktiver Graph mit Upstream/Downstream Impact-Analyse auf Tabellen- und Spaltenebene.
+     * **Quality & Validation:** Sofortige Transparenz über Testläufe für Auditoren und Data Stewards.
+
+---
+
+## 🔍 Notwendigkeits-Matrix über alle sechs Releases (`v1.0.0` bis `v3.0.0`)
+
+| Komponente / Schicht | Release `v1.0.0` (Local) | Release `v2.0.0` (Hybrid) | Release `v2.1.0` (Cloud) | Release `v2.2.0` (Hybrid & Sched.) | Release `v2.3.0` (Multi-Source CRM & API) | Release `v3.0.0` (Enterprise Governance & Catalog) **[AKTUELL]** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Externe Datenquellen** | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🔴 Nur 1 CSV | 🟢 YouTube + MariaDB via REST-API | 🟢 **Alle 3 Quellen: YouTube Streaming + MariaDB CRM + Category JSON** |
+| **Streaming Broker** | 🟢 Lokales Kafka | 🟢 Lokales Kafka | 🟢 Cloud Pub/Sub | 🟢 Hybrid Kafka Bridge (`run_bridge.ps1`) | 🟢 Hybrid Kafka Bridge + Cloud Pub/Sub | 🟢 **Hybrid Kafka Bridge + Cloud Pub/Sub** |
+| **Lakehouse Storage** | 📁 Lokal | 📁 Lokal | ☁️ 100 % GCS Bucket | ☁️ 100 % GCS Bucket | ☁️ 100 % GCS (`bronze/`, `silver/`, `crm/`) | ☁️ **100 % GCS Medallion Lakehouse** |
+| **Silver & Iceberg V2** | 🟢 PySpark flach | 🟢 PySpark Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 in GCS | 🟢 **Cloud Silver & Iceberg V2 in GCS** |
+| **Gold / DWH Modellierung** | 🟢 Spark Parquet | 🟢 dbt Core Star-Schema | 🟢 Cloud Workflows SPs | 🟢 Cloud Workflows SPs | 🟢 Star-Schema mit CRM & Payout-KPI | 🟢 **Star-Schema mit CRM, SCD-2 & dbt Quality Marts** |
+| **Scheduling & Trigger** | 🟡 Manuell / Airflow | 🟡 Manuell CLI | 🟡 Manuell CLI | 🟢 Cloud Scheduler (tägl. 06:00) | 🟢 Cloud Scheduler + Master Pipeline | 🟢 **Cloud Scheduler + Master Pipeline** (`run_pipeline.ps1`) |
+| **Observability** | 🟢 Lokal Prom./Graf. | 🟡 Lokal Prom./Graf. | 🟢 Grafana Cloud | 🟢 Grafana Cloud & Lokal | 🟢 Grafana Cloud & Lokales Grafana | 🟢 **Grafana Cloud & Lokales Monitoring Cockpit** |
+| **Cloud IaC** | 🔴 Kein IaC | 🔴 Kein IaC | 🟢 Terraform (10 Ress.) | 🟢 Terraform (11 Ressourcen) | 🟢 Terraform 1.17 (11 GCP-Ressourcen) | 🟢 **Terraform 1.17 (11 GCP-Ressourcen)** |
+| **Data Governance & Lineage** | 🔴 Keine Lineage | 🔴 Keine Lineage | 🔴 Keine Lineage | 🔴 Keine Lineage | 🔴 Keine Lineage | 🟢 **DataHub v0.13: 13 Knoten Multi-Source Lineage & 15 dbt Assertions** |
 
 ---
 
@@ -498,78 +524,83 @@ Keine Architektur ist ohne Trade-offs. Für einen Einsatz im großskaligen Enter
 ## 📂 Repository Layout
 
 > **Architektur-Legende:**  
-> 🟢 `[v2.3 Active]` = Aktiver Multi-Source Cloud Lakehouse & Automated Workflows Stack (GCS, Pub/Sub, Cloud Scheduler, Cloud Workflows, MariaDB CRM REST-API, Grafana Cloud, CI/CD)  
+> 🟢 `[v3.0 Active]` = Aktiver Data Governance, Multi-Source Cloud Lakehouse & Automated Workflows Stack (DataHub, GCS, Pub/Sub, Cloud Scheduler, Cloud Workflows, MariaDB CRM REST-API, Grafana Cloud, CI/CD)  
 > 🟢 `[v2.0 Active]` = Aktiver Kimball DWH & dbt Test Stack (dbt Star-Schema, 15 Tests, BigQuery)  
 > 🟡 `[v1.0/v2.0 Optional]` = Lokale Kafka-/Docker-Simulation & Hybrid Bridge (in v2.1 durch Cloud Pub/Sub & GCS abgelöst)  
 > 🔴 `[v1.0 Legacy / Deprecated]` = Historischer Stand Release v1.0.0 (durch Cloud Workflows und Grafana Cloud abgelöst)
 
 ```
 DE_Capstone_2026/
-├── .github/workflows/                      # 🟢 [v2.3 Active] ⭐ CI/CD Automation (GitHub Actions)
-│   ├── ci.yml                              # 🟢 [v2.3 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
-│   └── release.yml                         # 🟢 [v2.3 Active] Automatisierte Release-Erstellung bei Tag-Push
-├── dashboards/                             # 🟢 [v2.3 Active] ⭐ Observability-as-Code
-│   └── youtube_dataops_monitoring.json     # 🟢 [v2.3 Active] Grafana Cloud Dashboard (Workflows, BigQuery, Pub/Sub)
+├── .github/workflows/                      # 🟢 [v3.0 Active] ⭐ CI/CD Automation (GitHub Actions)
+│   ├── ci.yml                              # 🟢 [v3.0 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
+│   └── release.yml                         # 🟢 [v3.0 Active] Automatisierte Release-Erstellung bei Tag-Push
+├── dashboards/                             # 🟢 [v3.0 Active] ⭐ Observability-as-Code
+│   └── youtube_dataops_monitoring.json     # 🟢 [v3.0 Active] Grafana Cloud Dashboard (Workflows, BigQuery, Pub/Sub)
 ├── data/                                   # 📁 Lokale Ausgangslage (0 lokale Parquets oder Icebergs!)
-│   ├── raw/US_category_id.json             # 🟢 [v1.0-v2.3] Statische YouTube Kategorie-Referenz
-│   └── sample/us_videos_mini_500.csv       # 🟢 [v1.0-v2.3] Kuratierte Streaming-Quelldatei (500 Events)
-├── docs/                                   # 🟢 [v2.3 Active] ⭐ Enterprise Dokumentation & Handbuch
-│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.3 Active] 39-seitiges Architektur-Repertorium (On-Demand generierbar)
+│   ├── raw/US_category_id.json             # 🟢 [v1.0-v3.0] Statische YouTube Kategorie-Referenz (Quelle 2)
+│   └── sample/us_videos_mini_500.csv       # 🟢 [v1.0-v3.0] Kuratierte Streaming-Quelldatei (500 Events)
+├── docs/                                   # 🟢 [v3.0 Active] ⭐ Enterprise Dokumentation & Handbuch
+│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.3/v3.0] 39-seitiges Architektur-Repertorium
 ├── dags/                                   # 🔴 [v1.0 Legacy] Apache Airflow DAGs (abgelöst durch Cloud Workflows)
-├── dbt/                                    # 🟢 [v2.0/v2.3 Active] ⭐ Cloud DWH Transformationen & 15 Quality Tests
-│   ├── dbt_project.yml & profiles.yml      # 🟢 [v2.0/v2.3 Active] dbt Konfiguration & BigQuery EU-Profil
+├── dbt/                                    # 🟢 [v2.0/v3.0 Active] ⭐ Cloud DWH Transformationen & 15 Quality Tests
+│   ├── dbt_project.yml & profiles.yml      # 🟢 [v2.0/v3.0 Active] dbt Konfiguration & BigQuery EU-Profil
 │   ├── snapshots/dim_video_snapshot.sql    # 🟢 [v2.0 Active] SCD-2 Snapshot-Definition
 │   └── models/
-│       ├── staging/stg_videos.sql          # 🟢 [v2.0/v2.3 Active] Idempotente Deduplizierung & Typisierung View
-│       └── marts/core/                     # 🟢 [v2.0/v2.3 Active] ⭐ Kimball Star-Schema Marts & 15 Tests
-│           ├── dim_video.sql               # 🟢 [v2.0/v2.3 Active] SCD-2 Dimension mit LEAD()-Timeline & is_current
-│           ├── dim_category.sql            # 🟢 [v2.0/v2.3 Active] Conformed Kategorie-Dimension
-│           ├── dim_date.sql                # 🟢 [v2.0/v2.3 Active] Vorberechnete Datumsdimension
-│           ├── fact_video_metrics.sql      # 🟢 [v2.0/v2.3 Active] Interaktions-Fakten mit Point-in-Time Join
-│           └── schema.yml                  # 🟢 [v2.0/v2.3 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
-├── infra/                                  # 🟢 [v2.3 Active] ⭐ Infrastructure as Code (Terraform 1.17)
-│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v2.3 Active] 11 GCP Ressourcen (GCS, BQ, Pub/Sub, Scheduler, 3x Stored Proc, Workflow)
-│   ├── sql/                                # 🟢 [v2.3 Active] ⭐ Pattern B: Saubere BigQuery Stored Procedures (.sql)
-│   │   ├── 01_sp_build_stg_videos.sql      # 🟢 [v2.3 Active] Stored Procedure: Idempotenter Staging View
-│   │   ├── 02_sp_build_dimensions.sql      # 🟢 [v2.3 Active] Stored Procedure: dim_category, dim_date, dim_video & dim_creator_contract
-│   │   └── 03_sp_refresh_fact_table.sql    # 🟢 [v2.3 Active] Stored Procedure: fact_video_metrics (SCD-2 + Contract Payout-KPI)
+│       ├── staging/stg_videos.sql          # 🟢 [v2.0/v3.0 Active] Idempotente Deduplizierung & Typisierung View
+│       └── marts/core/                     # 🟢 [v2.0/v3.0 Active] ⭐ Kimball Star-Schema Marts & 15 Tests
+│           ├── dim_video.sql               # 🟢 [v2.0/v3.0 Active] SCD-2 Dimension mit LEAD()-Timeline & is_current
+│           ├── dim_category.sql            # 🟢 [v2.0/v3.0 Active] Conformed Kategorie-Dimension
+│           ├── dim_date.sql                # 🟢 [v2.0/v3.0 Active] Vorberechnete Datumsdimension
+│           ├── fact_video_metrics.sql      # 🟢 [v2.0/v3.0 Active] Interaktions-Fakten mit Point-in-Time Join
+│           └── schema.yml                  # 🟢 [v2.0/v3.0 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
+├── governance/                             # 🟢 [v3.0 Active] ⭐ Enterprise Data Governance & Lineage (DataHub)
+│   ├── recipe_dbt.yaml                     # 🟢 [v3.0 Active] Ingestion Recipe: dbt Core Manifest, Models & Test Assertions
+│   ├── recipe_lineage.yaml                 # 🟢 [v3.0 Active] Ingestion Recipe: Deklarative Pipeline-Lineage
+│   ├── pipeline_lineage.yaml               # 🟢 [v3.0 Active] Deklarative Lineage-Spezifikation aller 13 Knoten
+│   ├── register_sources.py                 # 🟢 [v3.0 Active] Registriert Root-Quellen (MariaDB MySQL & Kafka) in DataHub
+│   └── emit_full_lineage.py                # 🟢 [v3.0 Active] ⭐ Deterministischer Python REST Lineage Emitter (13 Knoten)
+├── infra/                                  # 🟢 [v3.0 Active] ⭐ Infrastructure as Code (Terraform 1.17)
+│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v3.0 Active] 11 GCP Ressourcen (GCS, BQ, Pub/Sub, Scheduler, 3x Stored Proc, Workflow)
+│   ├── sql/                                # 🟢 [v3.0 Active] ⭐ Pattern B: Saubere BigQuery Stored Procedures (.sql)
+│   │   ├── 01_sp_build_stg_videos.sql      # 🟢 [v3.0 Active] Stored Procedure: Idempotenter Staging View
+│   │   ├── 02_sp_build_dimensions.sql      # 🟢 [v3.0 Active] Stored Procedure: dim_category, dim_date, dim_video & dim_creator_contract
+│   │   └── 03_sp_refresh_fact_table.sql    # 🟢 [v3.0 Active] Stored Procedure: fact_video_metrics (SCD-2 + Contract Payout-KPI)
 │   └── workflows/
-│       └── pipeline.yaml                   # 🟢 [v2.3 Active] ⭐ End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)
-├── scripts/                                # 🟢 [v2.3 Active] ⭐ Multi-Source CRM Quellsystem-Artefakte
-│   ├── mariadb_schema_and_seed.sql         # 🟢 [v2.3 Active] DDL & Seeds fuer externe MariaDB @ weltler.at
-│   └── api_get_contracts.php               # 🟢 [v2.3 Active] Gesicherter HTTPS REST-API Endpoint (Bearer Token)
+│       └── pipeline.yaml                   # 🟢 [v3.0 Active] ⭐ End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)
+├── scripts/                                # 🟢 [v3.0 Active] ⭐ Multi-Source CRM Quellsystem-Artefakte
+│   ├── mariadb_schema_and_seed.sql         # 🟢 [v3.0 Active] DDL & Seeds fuer externe MariaDB @ weltler.at
+│   └── api_get_contracts.php               # 🟢 [v3.0 Active] Gesicherter HTTPS REST-API Endpoint (Bearer Token)
 ├── docker/                                 # Modulare Docker Compose Setups (für v1.0/v2.0 Offline-Modus)
 │   ├── docker-compose-spark.yml            # 🟡 [v2.0 Optional] Lokaler PySpark + Iceberg Container
 │   ├── docker-compose-kafka.yml            # 🟡 [v1.0/v2.0 Optional] Lokales Kafka KRaft
 │   ├── docker-compose-airflow.yml          # 🔴 [v1.0 Legacy] Lokaler Airflow & PostgreSQL Stack
 │   └── docker-compose-monitoring.yml       # 🔴 [v1.0 Legacy] Lokaler Prometheus & Grafana Container Stack
 ├── src/                                    # Quellcode
-│   ├── cloud_pubsub_producer.py            # 🟢 [v2.3 Active] ⭐ Serverless GCP Pub/Sub Producer (DLQ + SCD-2)
-│   ├── cloud_crm_extractor.py              # 🟢 [v2.3 Active] ⭐ Ingestiert CRM-Vertraege via HTTPS REST-API direkt nach GCS Bronze
-│   ├── bridge_kafka_to_pubsub.py           # 🟢 [v2.2 Active] ⭐ Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)
-│   ├── cloud_pubsub_consumer_bronze.py     # 🟢 [v2.3 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (bronze/)
-│   ├── cloud_pubsub_consumer_dlq.py        # 🟢 [v2.3 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (quarantine/)
-│   ├── cloud_silver_gcs.py                 # 🟢 [v2.3 Active] ⭐ GCS Bronze -> GCS Silver Parquet & GCS Apache Iceberg V2
-│   ├── cloud_workflow_runner.py            # 🟢 [v2.3 Active] ⭐ REST-Trigger & Poller für den Cloud Workflow
-│   ├── cloud_loader_bigquery.py            # 🟢 [v2.0/v2.3 Active] Cloud-to-Cloud Loader (gs://.../silver/ -> BigQuery)
-│   ├── generate_repertorium_pdf.py         # 🟢 [v2.3 Active] ReportLab Generator für das PDF-Architektur-Repertorium
+│   ├── cloud_pubsub_producer.py            # 🟢 [v3.0 Active] ⭐ Serverless GCP Pub/Sub Producer (DLQ + SCD-2)
+│   ├── cloud_crm_extractor.py              # 🟢 [v3.0 Active] ⭐ Ingestiert CRM-Vertraege via HTTPS REST-API direkt nach GCS Bronze
+│   ├── bridge_kafka_to_pubsub.py           # 🟢 [v2.2/v3.0 Active] ⭐ Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)
+│   ├── cloud_pubsub_consumer_bronze.py     # 🟢 [v3.0 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (bronze/)
+│   ├── cloud_pubsub_consumer_dlq.py        # 🟢 [v3.0 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (quarantine/)
+│   ├── cloud_silver_gcs.py                 # 🟢 [v3.0 Active] ⭐ GCS Bronze -> GCS Silver Parquet & GCS Apache Iceberg V2
+│   ├── cloud_workflow_runner.py            # 🟢 [v3.0 Active] ⭐ REST-Trigger & Poller für den Cloud Workflow
+│   ├── cloud_loader_bigquery.py            # 🟢 [v2.0/v3.0 Active] Cloud-to-Cloud Loader (gs://.../silver/ -> BigQuery)
+│   ├── generate_repertorium_pdf.py         # 🟢 [v2.3/v3.0 Active] ReportLab Generator für das PDF-Architektur-Repertorium
 │   ├── transform_silver.py                 # 🟡 [v2.0 Optional] Lokaler Docker-PySpark Iceberg Job
 │   ├── producer.py, consumer_*.py          # 🟡 [v1.0/v2.0 Optional] Lokale Kafka Skripte
 │   └── transform_gold.py                   # 🔴 [v1.0 Legacy] Altes Spark-Gold Skript
-├── run_pipeline.ps1                        # 🟢 [v2.3 Active] ⭐ One-Click Master-Runner für die gesamte Cloud-Pipeline
-├── run_infra.ps1                           # 🟢 [v2.3 Active] Runner: Terraform CLI (init, plan, apply, destroy)
-├── run_pubsub_producer.ps1                 # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub Producer
-├── run_extract_crm.ps1                     # 🟢 [v2.3 Active] Runner: Multi-Source CRM REST-API Extractor direkt nach GCS
-├── run_bridge.ps1                          # 🟢 [v2.2 Active] Runner: Hybrid Edge-to-Cloud Kafka-Bridge
-├── run_pubsub_bronze.ps1                   # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub -> GCS Bronze
-├── run_pubsub_dlq.ps1                      # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub -> GCS Quarantine
-├── run_silver.ps1                          # 🟢 [v2.3 Active] Runner: Cloud Silver & Apache Iceberg V2 in GCS
-├── run_workflow.ps1                        # 🟢 [v2.3 Active] Runner: End-to-End Google Cloud Workflow
-├── run_dbt.ps1                             # 🟢 [v2.0/v2.3 Active] Runner: dbt CLI (15 Data Quality Tests)
-├── load_to_bigquery.ps1                    # 🟡 [v2.0/v2.3 Optional] Runner: Cloud-to-Cloud BigQuery Loader
-├── requirements.txt                        # 🟢 [v2.3 Active] Python-Abhängigkeiten
-└── README.md                               # 🟢 [v2.3 Active] Vollständige Projektdokumentation
-```
+├── run_pipeline.ps1                        # 🟢 [v3.0 Active] ⭐ One-Click Master-Runner für die gesamte Cloud-Pipeline
+├── run_infra.ps1                           # 🟢 [v3.0 Active] Runner: Terraform CLI (init, plan, apply, destroy)
+├── run_pubsub_producer.ps1                 # 🟢 [v3.0 Active] Runner: Serverless GCP Pub/Sub Producer
+├── run_extract_crm.ps1                     # 🟢 [v3.0 Active] Runner: Multi-Source CRM REST-API Extractor direkt nach GCS
+├── run_bridge.ps1                          # 🟢 [v2.2/v3.0 Active] Runner: Hybrid Edge-to-Cloud Kafka-Bridge
+├── run_pubsub_bronze.ps1                   # 🟢 [v3.0 Active] Runner: Serverless GCP Pub/Sub -> GCS Bronze
+├── run_pubsub_dlq.ps1                      # 🟢 [v3.0 Active] Runner: Serverless GCP Pub/Sub -> GCS Quarantine
+├── run_silver.ps1                          # 🟢 [v3.0 Active] Runner: Cloud Silver & Apache Iceberg V2 in GCS
+├── run_workflow.ps1                        # 🟢 [v3.0 Active] Runner: End-to-End Google Cloud Workflow
+├── run_dbt.ps1                             # 🟢 [v2.0/v3.0 Active] Runner: dbt CLI (15 Data Quality Tests)
+├── load_to_bigquery.ps1                    # 🟡 [v2.0/v3.0 Optional] Runner: Cloud-to-Cloud BigQuery Loader
+├── requirements.txt                        # 🟢 [v3.0 Active] Python-Abhängigkeiten
+└── README.md                               # 🟢 [v3.0 Active] Vollständige Projektdokumentation
 ```
 
 ---
