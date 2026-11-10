@@ -88,3 +88,26 @@ resource "google_workflows_workflow" "youtube_dataops_pipeline" {
     google_bigquery_routine.sp_refresh_fact_table
   ]
 }
+
+# 7. Google Cloud Scheduler: Täglicher automatischer Trigger für den Cloud Workflow
+resource "google_cloud_scheduler_job" "pipeline_schedule" {
+  name             = "schedule-youtube-dataops-pipeline"
+  description      = "Startet die YouTube DataOps Pipeline täglich um 06:00 Uhr"
+  schedule         = "0 6 * * *"
+  time_zone        = "Europe/Berlin"
+  region           = var.region
+  attempt_deadline = "320s"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://workflowexecutions.googleapis.com/v1/projects/${var.project_id}/locations/${var.region}/workflows/${google_workflows_workflow.youtube_dataops_pipeline.name}/executions"
+
+    oauth_token {
+      service_account_email = var.service_account_email
+    }
+  }
+
+  depends_on = [
+    google_workflows_workflow.youtube_dataops_pipeline
+  ]
+}

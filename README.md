@@ -13,24 +13,24 @@
 
 Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattform** auf Basis des Kaggle YouTube Trending Video Datensatzes.
 
-Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über drei streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 via dbt)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows** sowie **Cloud-Observability via Grafana Cloud**.
+Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über vier streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie **Automated Cloud Scheduling & Observability**.
 
 > 📘 **Vollständiges Architektur-Handbuch & Repertorium (PDF):**  
-> Die tiefgehende 35+-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für `v1.0`, `v2.0` und `v2.1`, ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
+> Die tiefgehende 35+-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für `v1.0`, `v2.0`, `v2.1` und `v2.2`, ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** liegt unter [`docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf`](docs/YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf).
 
 ---
 
-## 📦 Die drei Releases im Detail: Prozesse, Architektur & Abgrenzung
+## 📦 Die vier Releases im Detail: Prozesse, Architektur & Abgrenzung
 
 ```
-v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2.1.0 (Serverless Cloud & Observability)
-┌───────────────────────────────┐    ┌────────────────────────────────────────┐ ┌──────────────────────────────────────────────┐
-│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Table Format (ACID)│ │ • Terraform IaC (10 GCP-Ressourcen + SPs)    │
-│ • Lokale Dead Letter Queue    │───►│ • dbt SCD-2 Dimension & Snapshots      │►│ • Cloud Pub/Sub Streaming (ersetzt Kafka!)   │
-│ • Ephemerer Docker PySpark    │    │ • 15 Automatisierte dbt Quality Gates  │ │ • Google Cloud Workflows (ersetzt Airflow!)  │
-│ • Lokaler Airflow 2.9 Stack   │    │ • BigQuery Star-Schema Materialisierung│ │ • Cloud-Native Grafana Cloud (Weg 1)         │
-│ • Lokaler Prometheus/Grafana  │    │ • Point-in-Time Joins in Faktentabelle │ │ • GitHub Actions CI/CD & Automated Release   │
-└───────────────────────────────┘    └────────────────────────────────────────┘ └──────────────────────────────────────────────┘
+v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2.1.0 (Serverless Cloud Core)          v2.2.0 (Enterprise Hybrid & Scheduling)
+┌───────────────────────────────┐    ┌────────────────────────────────────────┐ ┌──────────────────────────────────────┐ ┌──────────────────────────────────────────────┐
+│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Table Format (ACID)│ │ • Terraform IaC (10 GCP-Ressourcen)   │ │ • Terraform IaC (11 GCP-Ressourcen)          │
+│ • Lokale Dead Letter Queue    │───►│ • dbt SCD-2 Dimension & Snapshots      │►│ • 100% GCS Storage (0 lokale Parquets)│►│ • Hybrid Edge-to-Cloud Bridge (Kafka->PubSub)│
+│ • Ephemerer Docker PySpark    │    │ • 15 Automatisierte dbt Quality Gates  │ │ • Cloud Pub/Sub & Cloud Workflows    │ │ • Serverless Cloud Scheduler (Cron 06:00 UTC)│
+│ • Lokaler Airflow 2.9 Stack   │    │ • BigQuery Star-Schema Materialisierung│ │ • Pattern B: BigQuery Stored Procs   │ │ • Multi-Environment Readiness & Resilienz   │
+│ • Lokaler Prometheus/Grafana  │    │ • Point-in-Time Joins in Faktentabelle │ │ • Grafana Cloud Observability        │ │ • Hands-Free Zero-Touch Automation           │
+└───────────────────────────────┘    └────────────────────────────────────────┘ └──────────────────────────────────────┘ └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -95,18 +95,34 @@ v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2
 
 ---
 
-## 🔍 Notwendigkeits-Matrix über alle drei Releases (`v1.0.0` vs. `v2.0.0` vs. `v2.1.0`)
+### 🔹 Abschnitt 4: Release `v2.2.0` – Enterprise Hybrid Integration & Automated Scheduling (Aktueller Standard)
 
-| Komponente / Schicht | Release `v1.0.0` (Local Foundation) | Release `v2.0.0` (Hybrid Lakehouse) | Release `v2.1.0` (Serverless Cloud) **[AKTUELL]** |
-| :--- | :--- | :--- | :--- |
-| **Streaming Broker** | 🟢 **Pflicht:** Lokales Docker Kafka (KRaft) | 🟢 **Pflicht:** Lokales Docker Kafka (KRaft) | 🟢 **Pflicht:** **Google Cloud Pub/Sub** (`run_pubsub_*.ps1`)<br/>🔴 *Obsolet:* Lokales Kafka |
-| **Lakehouse Storage (Parquet & Iceberg)** | 📁 Lokal (`data/bronze`, `data/silver`, `data/gold`) | 📁 Lokal (`data/iceberg_warehouse`, `data/silver`) | ☁️ **100 % in GCS (`gs://lakehouse-youtube-cloudanalytics-514018/`)**<br/>*(Lokal unter `data/` liegen nur `raw/` und `sample/`!)* |
-| **Silver & Iceberg V2** | 🟢 PySpark (nur loses Parquet) | 🟢 PySpark + Lokales Iceberg V2 | 🟢 **Cloud Silver & Iceberg V2 auf GCS** (`run_silver.ps1` -> `cloud_silver_gcs.py`) |
-| **Gold / DWH Modellierung** | 🟢 `run_gold.ps1` (Flaches Spark Parquet) | 🟢 **dbt Core Kimball Star-Schema & SCD-2**<br/>🔴 *Obsolet:* `run_gold.ps1` | 🟢 **End-to-End via Cloud Workflows (`pipeline.yaml`) & dbt Core**<br/>🔴 *Obsolet:* `run_gold.ps1` |
-| **Quality Gates** | 🟡 Nur einfacher Rowcount | 🟢 **15 automatisierte dbt Tests** | 🟢 **In-Workflow Orphan Gate + 15 dbt Tests** |
-| **Orchestrierung** | 🟢 Lokaler Airflow 2.9 (`start_airflow.ps1`) | 🟡 PowerShell CLI | 🟢 **Full End-to-End Google Cloud Workflows** (`run_workflow.ps1` / `run_pipeline.ps1`)<br/>🔴 *Obsolet:* Lokaler Airflow Stack |
-| **Observability** | 🟢 Lokaler Prometheus/Grafana Container | 🟡 Lokaler Prometheus/Grafana Container | 🟢 **Grafana Cloud via GCP Monitoring (Weg 1)**<br/>🔴 *Obsolet:* Lokaler Monitoring-Container-Stack |
-| **Cloud IaC & CI/CD** | 🔴 Nicht vorhanden | 🔴 Manuelles Dataset / Kein IaC | 🟢 **Terraform 1.17** (`run_infra.ps1`: 10 GCP-Ressourcen inkl. 3 Stored Procedures) & **GitHub Actions** |
+**Zielsetzung:** Echte Hybrid-Cloud-Integration und vollständige Automatisierung! Anbindung lokaler On-Premises-Systeme über eine fehlertolerante **Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie vollautomatischer täglicher Start der DWH-Pipeline via **Google Cloud Scheduler** (11 Terraform-Ressourcen).
+
+* **Prozessablauf (`v2.2.0` – Enterprise Hybrid & Automation):**
+  1. **Hybrid Edge-to-Cloud Bridge (`run_bridge.ps1` -> `src/bridge_kafka_to_pubsub.py`):**
+     * Lokale Quellsysteme schreiben nach wie vor mit minimaler Latenz in On-Premises Kafka (`topic_ingest` und `topic_err`).
+     * Die Bridge liest fehlertolerant aus beiden Kafka-Topics, bündelt die Events und spiegelt sie per HTTPS/OAuth2-Batching nach Google Cloud Pub/Sub (`topic-youtube-ingest` und `topic-youtube-dlq`).
+     * **Enterprise-Nutzen:** Vollständige Entkopplung und Offline-Pufferspeicher bei Ausfall der Cloud-Internetverbindung (Zero Data Loss).
+  2. **Automated Serverless Scheduling (Terraform 11 Ressourcen):**
+     * Terraform provisioniert `google_cloud_scheduler_job.pipeline_schedule` (`schedule = "0 6 * * *"` in `Europe/Berlin`).
+     * Startet den Cloud Workflow täglich um 06:00 Uhr morgens per OIDC-authentifiziertem HTTPS POST – **vollständig hands-free und zu 100 % im GCP Free Tier (0,00 €)**!
+  3. **Medallion Lakehouse & Kimball DWH (GCS & BigQuery):**
+     * Unverändert robust: Bronze & DLQ landen direkt in GCS, Silver & Iceberg V2 transformieren in GCS, Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table`) bauen das Star-Schema in BigQuery auf.
+
+---
+
+## 🔍 Notwendigkeits-Matrix über alle vier Releases (`v1.0.0` vs. `v2.0.0` vs. `v2.1.0` vs. `v2.2.0`)
+
+| Komponente / Schicht | Release `v1.0.0` (Local) | Release `v2.0.0` (Hybrid Kimball) | Release `v2.1.0` (Serverless Cloud) | Release `v2.2.0` (Enterprise Hybrid & Scheduling) **[AKTUELL]** |
+| :--- | :--- | :--- | :--- | :--- |
+| **Streaming Broker** | 🟢 Lokales Kafka | 🟢 Lokales Kafka | 🟢 Cloud Pub/Sub | 🟢 **Hybrid: Lokales Kafka + Cloud Pub/Sub via Edge Bridge** (`run_bridge.ps1`) |
+| **Lakehouse Storage** | 📁 Lokal | 📁 Lokal | ☁️ 100 % GCS Bucket | ☁️ **100 % GCS Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)** |
+| **Silver & Iceberg V2** | 🟢 PySpark flach | 🟢 PySpark Iceberg V2 | 🟢 Cloud Silver & Iceberg V2 in GCS | 🟢 **Cloud Silver & Iceberg V2 in GCS** |
+| **Gold / DWH Modellierung** | 🟢 Spark Parquet | 🟢 dbt Core Star-Schema | 🟢 Cloud Workflows & Stored Procedures | 🟢 **Cloud Workflows & 3 BigQuery Stored Procedures** |
+| **Scheduling & Trigger** | 🟡 Manuell / Airflow | 🟡 Manuell CLI | 🟡 Manuell CLI (`run_pipeline.ps1`) | 🟢 **Automated Cloud Scheduler (Cron `0 6 * * *` täglich)** |
+| **Observability** | 🟢 Lokal Prometheus/Grafana | 🟡 Lokal Prometheus/Grafana | 🟢 Grafana Cloud / GCP Monitoring | 🟢 **Grafana Cloud & Lokales Grafana via GCP Monitoring Plugin** |
+| **Cloud IaC** | 🔴 Kein IaC | 🔴 Kein IaC | 🟢 Terraform (10 Ressourcen) | 🟢 **Terraform 1.17 (11 GCP-Ressourcen inkl. Cloud Scheduler)** |
 
 ---
 
@@ -241,16 +257,16 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 2: Cloud-Infrastruktur (10 GCP-Ressourcen inkl. Stored Procedures) per Terraform bereitstellen (Dauer: 30 Sekunden)
+### Schritt 2: Cloud-Infrastruktur (11 GCP-Ressourcen inkl. Stored Procedures & Cloud Scheduler) per Terraform bereitstellen (Dauer: 30 Sekunden)
 
-Terraform rollt deklarativ den GCS Bucket (`lakehouse-youtube-cloudanalytics-514018`), das BigQuery-Dataset (`youtube_analytics`), die 2 Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), die 2 Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`), die **3 BigQuery Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table` aus `infra/sql/*.sql`)** und den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`) aus:
+Terraform rollt deklarativ den GCS Bucket (`lakehouse-youtube-cloudanalytics-514018`), das BigQuery-Dataset (`youtube_analytics`), die 2 Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), die 2 Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`), die **3 BigQuery Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table` aus `infra/sql/*.sql`)**, den Serverless Cloud Workflow (`youtube-dataops-pipeline`) sowie den **Cloud Scheduler (`schedule-youtube-dataops-pipeline`)** aus:
 
 ```powershell
 .\run_infra.ps1 init
 .\run_infra.ps1 plan
 .\run_infra.ps1 apply
 ```
-*Ergebnis:* `Apply complete! Resources: 10 added, 0 changed, 0 destroyed.`
+*Ergebnis:* `Apply complete! Resources: 11 added, 0 changed, 0 destroyed.`
 
 ---
 
@@ -308,6 +324,27 @@ Sobald Terraform ausgerollt ist, kannst du die **gesamte End-to-End Cloud Pipeli
 .\run_dbt.ps1 test
 ```
 *Ergebnis:* `Done. PASS=15 WARN=0 ERROR=0 SKIP=0 TOTAL=15`
+
+---
+
+### 🌐 Option C (Release `v2.2.0`): Hybrid Edge-to-Cloud Streaming (On-Premises Kafka -> Cloud Pub/Sub)
+
+Demonstriert die Anbindung von On-Premises-Systemen über eine ausfallsichere Bridge:
+
+```powershell
+# 1. Lokales Kafka starten & Events im On-Premises-Cluster erzeugen
+.\start_kafka.ps1
+.\run_producer.ps1
+
+# 2. Hybrid Bridge starten (spiegelt Events resilient von Kafka nach Cloud Pub/Sub)
+.\run_bridge.ps1
+
+# 3. Cloud-Verarbeitung starten (zieht aus Pub/Sub nach GCS & führt DWH-Workflows aus)
+.\run_pubsub_bronze.ps1
+.\run_pubsub_dlq.ps1
+.\run_silver.ps1
+.\run_workflow.ps1
+```
 
 ---
 
