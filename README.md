@@ -258,9 +258,9 @@ erDiagram
 
 ---
 
-## 🚀 Deppensichere Schritt-für-Schritt Anleitung (Release `v2.1.0` – 100 % GCS & Cloud Workflows!)
+## 🚀 Deppensichere Schritt-für-Schritt Anleitung (Release `v2.3.0` – Multi-Source Cloud Lakehouse & Automated Workflows!)
 
-Befolge diese Schritte in deiner Windows PowerShell. Für Release `v2.1.0` musst du **weder Kafka, noch Airflow, noch lokales Prometheus, noch Docker starten** – sämtliche Parquets und Iceberg-Tabellen landen direkt im **Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, und **Google Cloud Workflows steuert den gesamten DWH-Aufbau End-to-End**!
+Befolge diese Schritte in deiner Windows PowerShell. Für Release `v2.3.0` musst du **weder Kafka, noch Airflow, noch lokales Prometheus, noch Docker starten** – sämtliche Parquets und Iceberg-Tabellen landen direkt im **Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, und **Google Cloud Workflows steuert den gesamten DWH-Aufbau End-to-End**!
 
 ### 📋 Voraussetzungen
 1. **Windows 10 oder 11** mit PowerShell 5.1 oder PowerShell 7.
@@ -270,15 +270,16 @@ Befolge diese Schritte in deiner Windows PowerShell. Für Release `v2.1.0` musst
    * Region: `europe-west3` (Frankfurt) / Location: `EU`
 4. **GCP Service Account Key:**
    * Speichere den JSON-Schlüssel deines Service Accounts als **`gcp_service_account.json`** direkt im Hauptverzeichnis (`D:\Projekte\CloudEng\DE_Capstone_2026\gcp_service_account.json`).
-5. **Die 6 erforderlichen IAM-Rollen für den Service Account:**
+5. **Die 7 erforderlichen IAM-Rollen für den Service Account:**
    * `roles/bigquery.admin` (BigQuery Administrator)
    * `roles/storage.admin` (Storage Administrator)
    * `roles/pubsub.admin` (Pub/Sub Administrator – für Topics & Subscriptions)
    * `roles/workflows.admin` (Workflows Administrator)
+   * `roles/cloudscheduler.admin` (Cloud Scheduler Administrator – für automatisierte Cron-Jobs)
    * `roles/iam.serviceAccountUser` (Dienstkonto-Nutzer)
    * `roles/monitoring.viewer` (Monitoring-Betrachter für Grafana Cloud)
-6. **Die 5 in GCP aktivierten APIs:**
-   * `workflows.googleapis.com`, `monitoring.googleapis.com`, `pubsub.googleapis.com`, `bigquery.googleapis.com`, `storage.googleapis.com`
+6. **Die 6 in GCP aktivierten APIs:**
+   * `workflows.googleapis.com`, `monitoring.googleapis.com`, `pubsub.googleapis.com`, `bigquery.googleapis.com`, `storage.googleapis.com`, `cloudscheduler.googleapis.com`
 
 ---
 
@@ -309,7 +310,7 @@ Terraform rollt deklarativ den GCS Bucket (`lakehouse-youtube-cloudanalytics-514
 
 ### ⚡ Option A (One-Click Master-Runner): Gesamte Pipeline in einem Befehl starten!
 
-Sobald Terraform ausgerollt ist, kannst du die **gesamte End-to-End Cloud Pipeline** (`Pub/Sub Producer` -> `Pub/Sub Bronze & DLQ nach GCS` -> `Silver & Iceberg V2 in GCS` -> `Google Cloud Workflow End-to-End Star-Schema & Quality Gate`) mit einem einzigen Befehl ausführen:
+Sobald Terraform ausgerollt ist, kannst du die **gesamte End-to-End Cloud Pipeline** (`Pub/Sub Producer` -> `Multi-Source CRM Ingest via HTTPS-API` -> `Pub/Sub Bronze & DLQ nach GCS` -> `Silver & Iceberg V2 in GCS` -> `Google Cloud Workflow End-to-End Star-Schema & Quality Gate`) mit einem einzigen Befehl ausführen:
 
 ```powershell
 .\run_pipeline.ps1
@@ -319,17 +320,21 @@ Sobald Terraform ausgerollt ist, kannst du die **gesamte End-to-End Cloud Pipeli
 
 ### 🔍 Option B: Einzelne Schritte der Pipeline gezielt ausführen
 
-#### Schritt 3: Serverless Cloud Streaming direkt nach GCS (`bronze/` & `quarantine/`)
+#### Schritt 3: Serverless Cloud Streaming & Multi-Source CRM-Extraktion direkt nach GCS
 
 ```powershell
 # 1. Sendet 439 Clean Events (inkl. SCD-2 Mutationen) an 'topic-youtube-ingest'
 #    und 61 korrupte Events (10% Fault-Injection) an 'topic-youtube-dlq'
 .\run_pubsub_producer.ps1
 
-# 2. Zieht & bestätigt die Clean Events aus 'sub-youtube-ingest' -> direkt nach gs://.../bronze/*.parquet (0 lokale Dateien!)
+# 2. Extrahiert relationale CRM-Verträge via HTTPS REST-API von MariaDB @ weltler.at
+#    und schreibt Parquet direkt nach gs://.../bronze/crm_contracts/creator_contracts.parquet (0 lokale Dateien!)
+.\run_extract_crm.ps1
+
+# 3. Zieht & bestätigt die Clean Events aus 'sub-youtube-ingest' -> direkt nach gs://.../bronze/*.parquet (0 lokale Dateien!)
 .\run_pubsub_bronze.ps1
 
-# 3. Zieht & bestätigt die fehlerhaften Events aus 'sub-youtube-dlq' -> direkt nach gs://.../quarantine/*.parquet (0 lokale Dateien!)
+# 4. Zieht & bestätigt die fehlerhaften Events aus 'sub-youtube-dlq' -> direkt nach gs://.../quarantine/*.parquet (0 lokale Dateien!)
 .\run_pubsub_dlq.ps1
 ```
 
@@ -397,7 +402,7 @@ Demonstriert die Anbindung von On-Premises-Systemen über eine ausfallsichere Br
 ### Schritt 8: Ressourcen aufräumen & 0-€ Kostengarantie
 
 ```powershell
-# Sämtliche 7 Cloud-Ressourcen (GCS, BigQuery, Pub/Sub Topics & Subscriptions, Workflows) rückstandslos löschen
+# Sämtliche 11 Cloud-Ressourcen (GCS Bucket, BigQuery Dataset & Stored Procedures, Pub/Sub Topics & Subscriptions, Workflows, Cloud Scheduler) rückstandslos löschen:
 .\run_infra.ps1 destroy
 ```
 
@@ -438,16 +443,18 @@ Keine Architektur ist ohne Trade-offs. Für einen Einsatz im großskaligen Enter
 
 | Runner-Skript | Parameter / Aufruf | Release-Status & Verantwortlichkeit |
 | :--- | :--- | :--- |
-| [`run_pipeline.ps1`](run_pipeline.ps1) | Keine | 🟢 **`[v2.1 Active]` ⭐ Master-Runner:** Führt die komplette Cloud-Pipeline (`Pub/Sub` -> `GCS Bronze/DLQ` -> `GCS Silver/Iceberg` -> `Cloud Workflow E2E`) in einem Befehl aus. |
-| [`run_infra.ps1`](run_infra.ps1) | `init`, `plan`, `apply`, `destroy` | 🟢 **`[v2.1 Active]`** Steuert Terraform 1.17 in `infra/` (7 GCP-Ressourcen inkl. Pub/Sub Subscriptions). |
+| [`run_pipeline.ps1`](run_pipeline.ps1) | Keine | 🟢 **`[v2.3 Active]` ⭐ Master-Runner:** Führt die komplette Cloud-Pipeline (`Pub/Sub Producer` -> `CRM REST-API Ingest` -> `GCS Bronze/DLQ` -> `GCS Silver/Iceberg` -> `Cloud Workflow E2E`) in einem Befehl aus. |
+| [`run_infra.ps1`](run_infra.ps1) | `init`, `plan`, `apply`, `destroy` | 🟢 **`[v2.3 Active]`** Steuert Terraform 1.17 in `infra/` (11 GCP-Ressourcen inkl. Cloud Scheduler, Pub/Sub & 3 Stored Procedures). |
 | [`run_pubsub_producer.ps1`](run_pubsub_producer.ps1) | Keine | 🟢 **`[v2.1 Active]`** Streamt Clean Events & DLQ Events serverlos an **Google Cloud Pub/Sub**. |
+| [`run_extract_crm.ps1`](run_extract_crm.ps1) | Keine | 🟢 **`[v2.3 Active]`** Fragt Creator-Verträge via HTTPS REST-API von MariaDB ab und schreibt serverlos direkt nach `gs://.../bronze/crm_contracts/`. |
+| [`run_bridge.ps1`](run_bridge.ps1) | Keine | 🟢 **`[v2.2 Active]`** Spiegelt Events resilient vom lokalen Kafka-Cluster (`127.0.0.1:9092`) nach Google Cloud Pub/Sub (`topic-youtube-ingest` & `dlq`). |
 | [`run_pubsub_bronze.ps1`](run_pubsub_bronze.ps1) | Keine | 🟢 **`[v2.1 Active]`** Zieht Clean Events aus `sub-youtube-ingest` und schreibt Parquet **direkt nach `gs://.../bronze/`** (0 lokale Dateien). |
 | [`run_pubsub_dlq.ps1`](run_pubsub_dlq.ps1) | Keine | 🟢 **`[v2.1 Active]`** Zieht Fehler-Events aus `sub-youtube-dlq` und schreibt Parquet **direkt nach `gs://.../quarantine/`** (0 lokale Dateien). |
 | [`run_silver.ps1`](run_silver.ps1) | Keine | 🟢 **`[v2.1 Active]`** Liest Bronze aus GCS, baut **Silver Parquet & Apache Iceberg V2 direkt in GCS (`gs://.../silver/` & `iceberg_warehouse/`)** und hält lokal 0 Parquets/Icebergs. |
-| [`run_workflow.ps1`](run_workflow.ps1) | Keine | 🟢 **`[v2.1 Active]`** Startet den **8-stufigen Google Cloud Workflow** (`GCS Load` -> `stg_videos` -> `dim_category` -> `dim_date` -> `dim_video SCD-2` -> `fact_video_metrics` -> `Quality Gate`). |
+| [`run_workflow.ps1`](run_workflow.ps1) | Keine | 🟢 **`[v2.1 Active]`** Startet den **8-stufigen Google Cloud Workflow** (`GCS Load` -> `stg_videos` -> `dim_category` -> `dim_date` -> `dim_video SCD-2` -> `dim_creator_contract` -> `fact_video_metrics` -> `Quality Gate`). |
 | [`run_dbt.ps1`](run_dbt.ps1) | `debug`, `snapshot`, `run`, `test` | 🟢 **`[v2.0/v2.1 Active]`** Steuert dbt Core CLI (insb. `.\run_dbt.ps1 test` für die 15 automatisierten dbt Data Tests). |
 | [`load_to_bigquery.ps1`](load_to_bigquery.ps1)| Keine | 🟡 **`[v2.0/v2.1 Optional]`** Cloud-to-Cloud BigQuery Loader (`gs://.../silver/*.parquet` -> `silver_videos`; wird in `v2.1` bereits automatisch durch Schritt 1 in `run_workflow.ps1` erledigt). |
-| [`start_kafka.ps1`](start_kafka.ps1) / [`stop_kafka.ps1`](stop_kafka.ps1) | Keine | 🟡 **`[v1.0/v2.0 Legacy / Optional]`** Startet/stoppt lokales Docker-Kafka *(in v2.1 durch Cloud Pub/Sub ersetzt)*. |
+| [`start_kafka.ps1`](start_kafka.ps1) / [`stop_kafka.ps1`](stop_kafka.ps1) | Keine | 🟡 **`[v1.0/v2.0 Legacy / Optional]`** Startet/stoppt lokales Docker-Kafka *(in v2.1 durch Cloud Pub/Sub bzw. in v2.2 durch Hybrid Bridge ergänzt)*. |
 | [`run_producer.ps1`](run_producer.ps1), [`run_bronze.ps1`](run_bronze.ps1), [`run_dlq.ps1`](run_dlq.ps1) | Keine | 🟡 **`[v1.0/v2.0 Legacy / Optional]`** Lokale Kafka Producer/Consumer *(in v2.1 durch `run_pubsub_*.ps1` ersetzt)*. |
 | [`run_gold.ps1`](run_gold.ps1) | Keine | 🔴 **`[v1.0 Legacy]`** Altes Spark-Gold-Skript *(ab v2.0 durch Star-Schema abgelöst)*. |
 | [`start_monitoring.ps1`](start_monitoring.ps1) / [`stop_monitoring.ps1`](stop_monitoring.ps1) | Keine | 🔴 **`[v1.0 Legacy]`** Lokaler Prometheus/Grafana Stack *(in v2.1 durch Grafana Cloud abgelöst)*. |
@@ -458,70 +465,78 @@ Keine Architektur ist ohne Trade-offs. Für einen Einsatz im großskaligen Enter
 ## 📂 Repository Layout
 
 > **Architektur-Legende:**  
-> 🟢 `[v2.1 Active]` = Aktiver Serverless Cloud & Observability Stack (100 % GCS Lakehouse, Cloud Pub/Sub, End-to-End Cloud Workflows, Grafana Cloud, CI/CD)  
+> 🟢 `[v2.3 Active]` = Aktiver Multi-Source Cloud Lakehouse & Automated Workflows Stack (GCS, Pub/Sub, Cloud Scheduler, Cloud Workflows, MariaDB CRM REST-API, Grafana Cloud, CI/CD)  
 > 🟢 `[v2.0 Active]` = Aktiver Kimball DWH & dbt Test Stack (dbt Star-Schema, 15 Tests, BigQuery)  
-> 🟡 `[v1.0/v2.0 Optional]` = Lokale Kafka-/Docker-Simulation (in v2.1 durch Cloud Pub/Sub & GCS abgelöst)  
+> 🟡 `[v1.0/v2.0 Optional]` = Lokale Kafka-/Docker-Simulation & Hybrid Bridge (in v2.1 durch Cloud Pub/Sub & GCS abgelöst)  
 > 🔴 `[v1.0 Legacy / Deprecated]` = Historischer Stand Release v1.0.0 (durch Cloud Workflows und Grafana Cloud abgelöst)
 
 ```
 DE_Capstone_2026/
-├── .github/workflows/                      # 🟢 [v2.1 Active] ⭐ CI/CD Automation (GitHub Actions)
-│   ├── ci.yml                              # 🟢 [v2.1 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
-│   └── release.yml                         # 🟢 [v2.1 Active] Automatisierte Release-Erstellung bei Tag-Push
-├── dashboards/                             # 🟢 [v2.1 Active] ⭐ Observability-as-Code
-│   └── youtube_dataops_monitoring.json     # 🟢 [v2.1 Active] Grafana Cloud Dashboard (Workflows, BigQuery, Pub/Sub)
+├── .github/workflows/                      # 🟢 [v2.3 Active] ⭐ CI/CD Automation (GitHub Actions)
+│   ├── ci.yml                              # 🟢 [v2.3 Active] Automatisierte Syntax-, Lint- & Schema-Prüfung
+│   └── release.yml                         # 🟢 [v2.3 Active] Automatisierte Release-Erstellung bei Tag-Push
+├── dashboards/                             # 🟢 [v2.3 Active] ⭐ Observability-as-Code
+│   └── youtube_dataops_monitoring.json     # 🟢 [v2.3 Active] Grafana Cloud Dashboard (Workflows, BigQuery, Pub/Sub)
 ├── data/                                   # 📁 Lokale Ausgangslage (0 lokale Parquets oder Icebergs!)
-│   ├── raw/US_category_id.json             # 🟢 [v1.0-v2.1] Statische YouTube Kategorie-Referenz
-│   └── sample/us_videos_mini_500.csv       # 🟢 [v1.0-v2.1] Kuratierte Streaming-Quelldatei (500 Events)
-├── docs/                                   # 🟢 [v2.1 Active] ⭐ Enterprise Dokumentation & Handbuch
-│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.1 Active] 38-seitiges Architektur-Repertorium
+│   ├── raw/US_category_id.json             # 🟢 [v1.0-v2.3] Statische YouTube Kategorie-Referenz
+│   └── sample/us_videos_mini_500.csv       # 🟢 [v1.0-v2.3] Kuratierte Streaming-Quelldatei (500 Events)
+├── docs/                                   # 🟢 [v2.3 Active] ⭐ Enterprise Dokumentation & Handbuch
+│   └── YouTube_DataOps_Platform_2026_Architektur_Repertorium.pdf # 🟢 [v2.3 Active] 39-seitiges Architektur-Repertorium (On-Demand generierbar)
 ├── dags/                                   # 🔴 [v1.0 Legacy] Apache Airflow DAGs (abgelöst durch Cloud Workflows)
-├── dbt/                                    # 🟢 [v2.0/v2.1 Active] ⭐ Cloud DWH Transformationen & 15 Quality Tests
-│   ├── dbt_project.yml & profiles.yml      # 🟢 [v2.0/v2.1 Active] dbt Konfiguration & BigQuery EU-Profil
+├── dbt/                                    # 🟢 [v2.0/v2.3 Active] ⭐ Cloud DWH Transformationen & 15 Quality Tests
+│   ├── dbt_project.yml & profiles.yml      # 🟢 [v2.0/v2.3 Active] dbt Konfiguration & BigQuery EU-Profil
 │   ├── snapshots/dim_video_snapshot.sql    # 🟢 [v2.0 Active] SCD-2 Snapshot-Definition
 │   └── models/
-│       ├── staging/stg_videos.sql          # 🟢 [v2.0/v2.1 Active] Idempotente Deduplizierung & Typisierung View
-│       └── marts/core/                     # 🟢 [v2.0/v2.1 Active] ⭐ Kimball Star-Schema Marts & 15 Tests
-│           ├── dim_video.sql               # 🟢 [v2.0/v2.1 Active] SCD-2 Dimension mit LEAD()-Timeline & is_current
-│           ├── dim_category.sql            # 🟢 [v2.0/v2.1 Active] Conformed Kategorie-Dimension
-│           ├── dim_date.sql                # 🟢 [v2.0/v2.1 Active] Vorberechnete Datumsdimension
-│           ├── fact_video_metrics.sql      # 🟢 [v2.0/v2.1 Active] Interaktions-Fakten mit Point-in-Time Join
-│           └── schema.yml                  # 🟢 [v2.0/v2.1 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
-├── infra/                                  # 🟢 [v2.1 Active] ⭐ Infrastructure as Code (Terraform 1.17)
-│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v2.1 Active] 10 GCP Ressourcen (GCS, BQ, Pub/Sub, 3x Stored Proc, Workflow)
-│   ├── sql/                                # 🟢 [v2.1 Active] ⭐ Pattern B: Saubere BigQuery Stored Procedures (.sql)
-│   │   ├── 01_sp_build_stg_videos.sql      # 🟢 [v2.1 Active] Stored Procedure: Idempotenter Staging View
-│   │   ├── 02_sp_build_dimensions.sql      # 🟢 [v2.1 Active] Stored Procedure: dim_category, dim_date & SCD-2 dim_video
-│   │   └── 03_sp_refresh_fact_table.sql    # 🟢 [v2.1 Active] Stored Procedure: fact_video_metrics (Point-in-Time Join)
+│       ├── staging/stg_videos.sql          # 🟢 [v2.0/v2.3 Active] Idempotente Deduplizierung & Typisierung View
+│       └── marts/core/                     # 🟢 [v2.0/v2.3 Active] ⭐ Kimball Star-Schema Marts & 15 Tests
+│           ├── dim_video.sql               # 🟢 [v2.0/v2.3 Active] SCD-2 Dimension mit LEAD()-Timeline & is_current
+│           ├── dim_category.sql            # 🟢 [v2.0/v2.3 Active] Conformed Kategorie-Dimension
+│           ├── dim_date.sql                # 🟢 [v2.0/v2.3 Active] Vorberechnete Datumsdimension
+│           ├── fact_video_metrics.sql      # 🟢 [v2.0/v2.3 Active] Interaktions-Fakten mit Point-in-Time Join
+│           └── schema.yml                  # 🟢 [v2.0/v2.3 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
+├── infra/                                  # 🟢 [v2.3 Active] ⭐ Infrastructure as Code (Terraform 1.17)
+│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v2.3 Active] 11 GCP Ressourcen (GCS, BQ, Pub/Sub, Scheduler, 3x Stored Proc, Workflow)
+│   ├── sql/                                # 🟢 [v2.3 Active] ⭐ Pattern B: Saubere BigQuery Stored Procedures (.sql)
+│   │   ├── 01_sp_build_stg_videos.sql      # 🟢 [v2.3 Active] Stored Procedure: Idempotenter Staging View
+│   │   ├── 02_sp_build_dimensions.sql      # 🟢 [v2.3 Active] Stored Procedure: dim_category, dim_date, dim_video & dim_creator_contract
+│   │   └── 03_sp_refresh_fact_table.sql    # 🟢 [v2.3 Active] Stored Procedure: fact_video_metrics (SCD-2 + Contract Payout-KPI)
 │   └── workflows/
-│       └── pipeline.yaml                   # 🟢 [v2.1 Active] ⭐ End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)
+│       └── pipeline.yaml                   # 🟢 [v2.3 Active] ⭐ End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)
+├── scripts/                                # 🟢 [v2.3 Active] ⭐ Multi-Source CRM Quellsystem-Artefakte
+│   ├── mariadb_schema_and_seed.sql         # 🟢 [v2.3 Active] DDL & Seeds fuer externe MariaDB @ weltler.at
+│   └── api_get_contracts.php               # 🟢 [v2.3 Active] Gesicherter HTTPS REST-API Endpoint (Bearer Token)
 ├── docker/                                 # Modulare Docker Compose Setups (für v1.0/v2.0 Offline-Modus)
 │   ├── docker-compose-spark.yml            # 🟡 [v2.0 Optional] Lokaler PySpark + Iceberg Container
 │   ├── docker-compose-kafka.yml            # 🟡 [v1.0/v2.0 Optional] Lokales Kafka KRaft
 │   ├── docker-compose-airflow.yml          # 🔴 [v1.0 Legacy] Lokaler Airflow & PostgreSQL Stack
 │   └── docker-compose-monitoring.yml       # 🔴 [v1.0 Legacy] Lokaler Prometheus & Grafana Container Stack
 ├── src/                                    # Quellcode
-│   ├── cloud_pubsub_producer.py            # 🟢 [v2.1 Active] ⭐ Serverless GCP Pub/Sub Producer (DLQ + SCD-2)
-│   ├── cloud_pubsub_consumer_bronze.py     # 🟢 [v2.1 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (bronze/)
-│   ├── cloud_pubsub_consumer_dlq.py        # 🟢 [v2.1 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (quarantine/)
-│   ├── cloud_silver_gcs.py                 # 🟢 [v2.1 Active] ⭐ GCS Bronze -> GCS Silver Parquet & GCS Apache Iceberg V2
-│   ├── cloud_workflow_runner.py            # 🟢 [v2.1 Active] ⭐ REST-Trigger & Poller für den 8-stufigen Cloud Workflow
-│   ├── cloud_loader_bigquery.py            # 🟢 [v2.0/v2.1 Active] Cloud-to-Cloud Loader (gs://.../silver/ -> BigQuery)
-│   ├── generate_repertorium_pdf.py         # 🟢 [v2.1 Active] ReportLab Generator für das PDF-Architektur-Repertorium
+│   ├── cloud_pubsub_producer.py            # 🟢 [v2.3 Active] ⭐ Serverless GCP Pub/Sub Producer (DLQ + SCD-2)
+│   ├── cloud_crm_extractor.py              # 🟢 [v2.3 Active] ⭐ Ingestiert CRM-Vertraege via HTTPS REST-API direkt nach GCS Bronze
+│   ├── bridge_kafka_to_pubsub.py           # 🟢 [v2.2 Active] ⭐ Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)
+│   ├── cloud_pubsub_consumer_bronze.py     # 🟢 [v2.3 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (bronze/)
+│   ├── cloud_pubsub_consumer_dlq.py        # 🟢 [v2.3 Active] ⭐ Pub/Sub Pull -> In-Memory Parquet direkt nach GCS (quarantine/)
+│   ├── cloud_silver_gcs.py                 # 🟢 [v2.3 Active] ⭐ GCS Bronze -> GCS Silver Parquet & GCS Apache Iceberg V2
+│   ├── cloud_workflow_runner.py            # 🟢 [v2.3 Active] ⭐ REST-Trigger & Poller für den Cloud Workflow
+│   ├── cloud_loader_bigquery.py            # 🟢 [v2.0/v2.3 Active] Cloud-to-Cloud Loader (gs://.../silver/ -> BigQuery)
+│   ├── generate_repertorium_pdf.py         # 🟢 [v2.3 Active] ReportLab Generator für das PDF-Architektur-Repertorium
 │   ├── transform_silver.py                 # 🟡 [v2.0 Optional] Lokaler Docker-PySpark Iceberg Job
 │   ├── producer.py, consumer_*.py          # 🟡 [v1.0/v2.0 Optional] Lokale Kafka Skripte
 │   └── transform_gold.py                   # 🔴 [v1.0 Legacy] Altes Spark-Gold Skript
-├── run_pipeline.ps1                        # 🟢 [v2.1 Active] ⭐ One-Click Master-Runner für die gesamte Cloud-Pipeline
-├── run_infra.ps1                           # 🟢 [v2.1 Active] Runner: Terraform CLI (init, plan, apply, destroy)
-├── run_pubsub_producer.ps1                 # 🟢 [v2.1 Active] Runner: Serverless GCP Pub/Sub Producer
-├── run_pubsub_bronze.ps1                   # 🟢 [v2.1 Active] Runner: Serverless GCP Pub/Sub -> GCS Bronze
-├── run_pubsub_dlq.ps1                      # 🟢 [v2.1 Active] Runner: Serverless GCP Pub/Sub -> GCS Quarantine
-├── run_silver.ps1                          # 🟢 [v2.1 Active] Runner: Cloud Silver & Apache Iceberg V2 in GCS
-├── run_workflow.ps1                        # 🟢 [v2.1 Active] Runner: 8-stufiger End-to-End Google Cloud Workflow
-├── run_dbt.ps1                             # 🟢 [v2.0/v2.1 Active] Runner: dbt CLI (15 Data Quality Tests)
-├── load_to_bigquery.ps1                    # 🟡 [v2.0/v2.1 Optional] Runner: Cloud-to-Cloud BigQuery Loader
-├── requirements.txt                        # 🟢 [v2.1 Active] Python-Abhängigkeiten
-└── README.md                               # 🟢 [v2.1 Active] Vollständige Projektdokumentation
+├── run_pipeline.ps1                        # 🟢 [v2.3 Active] ⭐ One-Click Master-Runner für die gesamte Cloud-Pipeline
+├── run_infra.ps1                           # 🟢 [v2.3 Active] Runner: Terraform CLI (init, plan, apply, destroy)
+├── run_pubsub_producer.ps1                 # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub Producer
+├── run_extract_crm.ps1                     # 🟢 [v2.3 Active] Runner: Multi-Source CRM REST-API Extractor direkt nach GCS
+├── run_bridge.ps1                          # 🟢 [v2.2 Active] Runner: Hybrid Edge-to-Cloud Kafka-Bridge
+├── run_pubsub_bronze.ps1                   # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub -> GCS Bronze
+├── run_pubsub_dlq.ps1                      # 🟢 [v2.3 Active] Runner: Serverless GCP Pub/Sub -> GCS Quarantine
+├── run_silver.ps1                          # 🟢 [v2.3 Active] Runner: Cloud Silver & Apache Iceberg V2 in GCS
+├── run_workflow.ps1                        # 🟢 [v2.3 Active] Runner: End-to-End Google Cloud Workflow
+├── run_dbt.ps1                             # 🟢 [v2.0/v2.3 Active] Runner: dbt CLI (15 Data Quality Tests)
+├── load_to_bigquery.ps1                    # 🟡 [v2.0/v2.3 Optional] Runner: Cloud-to-Cloud BigQuery Loader
+├── requirements.txt                        # 🟢 [v2.3 Active] Python-Abhängigkeiten
+└── README.md                               # 🟢 [v2.3 Active] Vollständige Projektdokumentation
+```
 ```
 
 ---
