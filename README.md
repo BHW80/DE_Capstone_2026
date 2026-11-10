@@ -6,7 +6,7 @@
 [![Apache Iceberg](https://img.shields.io/badge/Table%20Format-Apache%20Iceberg%20V2-00758F?logo=apache)](https://iceberg.apache.org/)
 [![dbt Core](https://img.shields.io/badge/Transform-dbt%20Core%201.13-FF694B?logo=dbt)](https://www.getdbt.com/)
 [![Google BigQuery](https://img.shields.io/badge/Cloud%20Warehouse-Google%20BigQuery-4285F4?logo=googlecloud)](https://cloud.google.com/bigquery)
-[![DataHub](https://img.shields.io/badge/Governance-DataHub%20v0.13-7C3AED?logo=apache)](https://datahubproject.io/)
+[![DataHub](https://img.shields.io/badge/Enterprise%20Governance-LinkedIn%2FAcryl%20DataHub%20v0.13-7C3AED?logo=apache)](https://datahubproject.io/)
 [![Google Cloud Workflows](https://img.shields.io/badge/Orchestration-Google%20Cloud%20Workflows-4285F4?logo=googlecloud)](https://cloud.google.com/workflows)
 [![Grafana Cloud](https://img.shields.io/badge/Observability-Grafana%20Cloud-F46800?logo=grafana)](https://grafana.com/)
 [![Terraform](https://img.shields.io/badge/IaC-Terraform%201.17-844FBA?logo=terraform)](https://www.terraform.io/)
@@ -14,7 +14,7 @@
 
 Eine unternehmensweite, produktionsreife **End-to-End DataOps & Analytics Plattform** auf Basis des Kaggle YouTube Trending Video Datensatzes.
 
-Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über sechs streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0` -> `v3.0.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)**, **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)** sowie **Enterprise Data Governance, Multi-Source End-to-End Lineage & Quality Catalog via LinkedIn/Acryl DataHub (`v3.0.0`)**.
+Dieses Repository dokumentiert die vollständige Evolution eines universitären On-Premises Big-Data-Projekts (2021) über sechs streng abgegrenzte Architektur-Releases (`v1.0.0` -> `v2.0.0` -> `v2.1.0` -> `v2.2.0` -> `v2.3.0` -> `v3.0.0`) hin zu einem modernen **Medallion Lakehouse** mit **Apache Iceberg V2**, **Kimball Star-Schema (SCD-2 & Conformed Dimensions)**, **serverloser GCP-Ingestion & Orchestrierung via Terraform, Cloud Pub/Sub & Cloud Workflows**, **Hybrid Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)**, **Multi-Source SaaS/OLTP REST-API Ingestion (MariaDB CRM Integration)** sowie **Enterprise Data Governance, Multi-Source End-to-End Lineage (13 Knoten) & Quality Catalog via LinkedIn/Acryl DataHub (`v3.0.0`)**.
 
 > 📘 **Architektur-Handbuch & Technisches Repertorium (On-Demand Generator):**  
 > Die tiefgehende 39-seitige Enterprise-Dokumentation inkl. Prozessvergleichen für alle Releases (`v1.0` bis `v2.3`), ADRs, Enterprise-Risikoanalyse, Runbooks und **25 Senior-Interview-Fragen** kann bei Bedarf lokal über `python src/generate_repertorium_pdf.py` als PDF kompiliert werden.
@@ -65,11 +65,11 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
 
 ---
 
-### 🔹 Abschnitt 3: Release `v2.1.0` – 100 % Cloud Lakehouse Storage, Pub/Sub & End-to-End Cloud Workflows (Aktuelle Produktion)
+### 🔹 Abschnitt 3: Release `v2.1.0` – 100 % Cloud Lakehouse Storage, Pub/Sub & End-to-End Cloud Workflows
 
 **Zielsetzung:** Vollständige Eliminierung sowohl lokaler Infrastruktur-Container (kein Kafka, kein Airflow, kein lokales Prometheus nötig) **als auch lokaler Parquet- und Iceberg-Zwischenordner**! Abseits der Ausgangslage (`data/sample/` und `data/raw/`) liegen **sämtliche Parquets und das Apache Iceberg V2 Warehouse im Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, und **Google Cloud Workflows steuert den gesamten Cloud-DWH-Ablauf End-to-End**.
 
-* **Prozessablauf (`v2.1.0` – Aktueller Produktionsstandard, auch als One-Click via `.\run_pipeline.ps1`):**
+* **Prozessablauf (`v2.1.0`):**
   1. **Infrastructure as Code (Terraform 1.17):** `run_infra.ps1 apply` provisioniert vollautomatisch **10 Google Cloud Ressourcen**: GCS Lakehouse Bucket (`gs://lakehouse-youtube-cloudanalytics-514018`), BigQuery Dataset (`youtube_analytics`), 2 Cloud Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), 2 Cloud Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`), **3 BigQuery Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table` aus `infra/sql/*.sql`)** sowie den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`).
   2. **Serverless Cloud Streaming direkt in den GCS Lakehouse Bucket (0 lokale Parquet-Dateien!):**
      * `run_pubsub_producer.ps1` (`src/cloud_pubsub_producer.py`) sendet die validen Events (inkl. 3 SCD-2 Mutationen für `2kyS6SvSYSE`) direkt per HTTPS/REST an `topic-youtube-ingest` und die korrupten DLQ-Events (~10 %) an `topic-youtube-dlq`.
@@ -87,19 +87,18 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
      * **Step 6 (`quality_gate_validation` & `evaluate_quality_gate`):** Prüft referenzielle Integrität (`0 orphan records`) und bricht bei Fehlern sofort per `raise` ab.
   5. **Cloud-Native Observability via Grafana Cloud & CI/CD:** Grafana Cloud fragt über das native Google Cloud Monitoring Plugin (`stackdriver`) direkt Workflow-Durchsatz, p99-Latenz, gescannte BigQuery-Bytes und die Pub/Sub-Nachrichtenströme ab. GitHub Actions validiert jeden Push automatisch.
 * **Was in `v2.1.0` abgelöst / VOLLSTÄNDIG OPTIONAL ist:**
-  * 🔴 **Lokale Parquet- & Iceberg-Ordner (`data/bronze`, `data/quarantine`, `data/silver`, `data/iceberg_warehouse`, `data/gold`):** **KOMPLETT IN DEN GCS-BUCKET (`gs://lakehouse-youtube-cloudanalytics-514018/`) VERLAGERT!** Lokal existieren nur noch `data/raw/` und `data/sample/`.
-  * 🔴 **Lokaler Kafka-Container (`start_kafka.ps1`, `run_producer.ps1`, `run_bronze.ps1`, `run_dlq.ps1`):** **NICHT MEHR NÖTIG!** Vollständig durch Google Cloud Pub/Sub (`run_pubsub_*.ps1`) abgelöst.
-  * 🔴 **Lokaler Airflow Stack (`start_airflow.ps1`, `dags/`):** **VOLLSTÄNDIG ÜBERFLÜSSIG!** Zu 100 % durch den 8-stufigen Google Cloud Workflow abgelöst.
-  * 🔴 **Lokaler Prometheus/Grafana Stack (`start_monitoring.ps1`):** **VOLLSTÄNDIG ÜBERFLÜSSIG!** Durch Grafana Cloud (Weg 1) abgelöst.
-  * 🟡 **Manueller Aufruf von `load_to_bigquery.ps1` & `run_dbt.ps1 run`:** Im Regelbetrieb übernimmt `run_workflow.ps1` bereits den GCS-Load und den Bau aller Star-Schema-Tabellen automatisch; `run_dbt.ps1 test` dient zur ergänzenden Ausführung der 15 dbt-Tests.
+  * 🔴 **Lokale Parquet- & Iceberg-Ordner:** Komplett in den GCS-Bucket verlagert.
+  * 🔴 **Lokaler Kafka-Container:** Durch Google Cloud Pub/Sub abgelöst.
+  * 🔴 **Lokaler Airflow Stack:** Durch Google Cloud Workflows abgelöst.
+  * 🔴 **Lokaler Prometheus/Grafana Stack:** Durch Grafana Cloud abgelöst.
 
 ---
 
-### 🔹 Abschnitt 4: Release `v2.2.0` – Enterprise Hybrid Integration & Automated Scheduling (Aktueller Standard)
+### 🔹 Abschnitt 4: Release `v2.2.0` – Enterprise Hybrid Integration & Automated Scheduling
 
 **Zielsetzung:** Echte Hybrid-Cloud-Integration und vollständige Automatisierung! Anbindung lokaler On-Premises-Systeme über eine fehlertolerante **Edge-to-Cloud Bridge (On-Prem Kafka -> Cloud Pub/Sub)** sowie vollautomatischer täglicher Start der DWH-Pipeline via **Google Cloud Scheduler** (11 Terraform-Ressourcen).
 
-* **Prozessablauf (`v2.2.0` – Enterprise Hybrid & Automation):**
+* **Prozessablauf (`v2.2.0`):**
   1. **Hybrid Edge-to-Cloud Bridge (`run_bridge.ps1` -> `src/bridge_kafka_to_pubsub.py`):**
      * Lokale Quellsysteme schreiben nach wie vor mit minimaler Latenz in On-Premises Kafka (`topic_ingest` und `topic_err`).
      * Die Bridge liest fehlertolerant aus beiden Kafka-Topics, bündelt die Events und spiegelt sie per HTTPS/OAuth2-Batching nach Google Cloud Pub/Sub (`topic-youtube-ingest` und `topic-youtube-dlq`).
@@ -112,11 +111,11 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
 
 ---
 
-### 🔹 Abschnitt 5: Release `v2.3.0` – Multi-Source Enterprise API Ingestion & Conformed Kimball Dimensions (Aktueller Standard)
+### 🔹 Abschnitt 5: Release `v2.3.0` – Multi-Source Enterprise API Ingestion & Conformed Kimball Dimensions
 
 **Zielsetzung:** Auflösung des Single-Source-Silos! Großunternehmen führen Daten aus unterschiedlichen Quellsystemen zusammen. `v2.3.0` bindet eine externe relationale **MariaDB** (gehostet auf `www.weltler.at`) über eine gesicherte **HTTPS REST-API (Bearer Token)** an, spiegelt die Daten direkt in GCS Bronze und verheiratet die Verträge über eine **Conformed Dimension (`dim_creator_contract`)** und eine **neue Business-KPI (`estimated_creator_payout_usd`)** im BigQuery Star-Schema.
 
-* **Prozessablauf (`v2.3.0` – Multi-Source & Multi-Interval):**
+* **Prozessablauf (`v2.3.0`):**
   1. **MariaDB OLTP Source & DDL Seed (`scripts/mariadb_schema_and_seed.sql`):**
      * Hält die relationalen Creator-Stammdaten: `channel_title`, `partner_tier`, `revenue_share_pct`, `country_code`, `account_manager`, `signed_date`.
   2. **API-Led Ingestion Pattern (`scripts/api_get_contracts.php` & `src/cloud_crm_extractor.py` / `run_extract_crm.ps1`):**
@@ -136,25 +135,26 @@ v1.0.0 (Local Docker)       v2.0.0 (Kimball DWH)         v2.1.0 (Serverless Clou
 
 ### 🔹 Abschnitt 6: Release `v3.0.0` – Enterprise Data Governance, Multi-Source Lineage & Quality Catalog (DataHub Edition) **[AKTUELL]**
 
-**Zielsetzung:** Echte Enterprise-Transparenz, Data Governance, automatisierte Qualitätskataloge und vollständige Auditierbarkeit! Großunternehmen fordern heute lückenlose Nachvollziehbarkeit: *Woher stammt ein Datenpunkt in der Faktentabelle? Welcher Transformation unterlag er? Welche Tests haben ihn freigegeben?*  
-Release `v3.0.0` integriert **LinkedIn/Acryl DataHub** als zentrales Enterprise Governance Portal und schlägt die Brücke über alle 3 Quellwelten und alle 13 Knoten des hybriden Medallion Lakehouses.
+**Zielsetzung:** Echte Enterprise-Transparenz, Data Governance, automatisierte Qualitätskataloge und vollständige Auditierbarkeit! Großunternehmen fordern heute lückenlose Nachvollziehbarkeit: *Woher stammt ein Datenpunkt in der Faktentabelle? Welcher Transformation unterlag er? Welche Tests haben ihn freigegeben? Welcher Downstream-Report bricht, wenn sich eine Dimension ändert?*  
+Release `v3.0.0` integriert **LinkedIn/Acryl DataHub (v0.13)** als zentrales Enterprise Governance Portal und schlägt die Brücke über alle 3 Quellwelten und alle 13 Knoten des hybriden Medallion Lakehouses.
 
-* **Prozessablauf & Governance Highlights (`v3.0.0`):**
+* **Die vier Kernsäulen der DataHub-Governance in `v3.0.0`:**
   1. **Multi-Source End-to-End Lineage über alle drei Quellwelten (13 Knoten):**
      DataHub visualisiert die lückenlose Kette von den originären Quellen bis zur BI-Faktentabelle:
-     * **Quelle 1 (Edge Streaming):** On-Premises Apache Kafka (`topic_ingest`) ➔ Cloud Pub/Sub ➔ GCS Bronze Parquet.
-     * **Quelle 2 (Referenz-Metadaten):** `data/raw/US_category_id.json` (Category Dictionary) ➔ Zero-Shuffle Join in GCS Silver & Conformed Dimension `dim_category`.
-     * **Quelle 3 (SaaS OLTP CRM):** MariaDB @ weltler.at (`usrdb_welbmqup.creator_contracts`) ➔ HTTPS REST-API ➔ GCS Bronze CRM Parquet ➔ BigLake External Table (`ext_creator_contracts`) ➔ Conformed Dimension `dim_creator_contract`.
-     * **DWH Marts & Kimball Fact:** Alle vier Dimensionen (`dim_video` SCD-2, `dim_category`, `dim_date`, `dim_creator_contract`) und Staging fließen über das **dbt Core Transformationsmodell** direkt in die zentrale Faktentabelle **`fact_video_metrics`** (mit Payout-KPI).
+     * **Quelle 1 (Edge Streaming):** On-Premises Apache Kafka (`topic_ingest`) ➔ Cloud Pub/Sub (`topic-youtube-ingest`) ➔ GCS Bronze (`lakehouse-youtube-cloudanalytics-514018/bronze`).
+     * **Quelle 2 (Referenz-Metadaten):** `data/raw/US_category_id.json` (Category Dictionary) ➔ Zero-Shuffle Join in GCS Silver (`lakehouse/silver`) & Conformed Dimension `dim_category`.
+     * **Quelle 3 (SaaS OLTP CRM):** MariaDB @ weltler.at (`usrdb_welbmqup.creator_contracts`) ➔ HTTPS REST-API ➔ GCS Bronze CRM Parquet (`lakehouse/bronze/crm_contracts`) ➔ BigLake External Table (`ext_creator_contracts`) ➔ Conformed Dimension `dim_creator_contract`.
+     * **Transformationen & Kimball Star-Schema:** GCS Silver ➔ BigQuery Quelltabelle `silver_videos` ➔ Staging View `stg_videos` ➔ SCD-2 Dimension `dim_video`, Datumsdimension `dim_date`, Kategorie-Dimension `dim_category`.
+     * **Kimball Fact Table:** Alle vier Dimensionen und Staging fließen über das **dbt Core Transformationsmodell** (`fact_video_metrics`) in die physische BigQuery-Faktentabelle **`fact_video_metrics`** (mit Payout-KPI).
   2. **Automated Quality Gate Catalog (15 dbt Assertions in DataHub):**
      * `governance/recipe_dbt.yaml` konsumiert die dbt-Artefakte (`manifest.json` und `run_results.json`).
      * Alle **15 automatisierten dbt Data Tests** (Unique Keys, Not-Null Constraints, referenzielle Fremdschlüssel-Beziehungen zu Dimensionen) werden in DataHub als **grüne Governance-Quality-Assertions** mit vollständiger Ausführungshistorie und Fehlerrate registriert.
-  3. **Deterministischer Multi-Source Emitter (`governance/emit_full_lineage.py`):**
+  3. **Deterministischer Multi-Source REST Emitter (`governance/emit_full_lineage.py` / `run_datahub.ps1 emit`):**
      * Nutzt das offizielle `DataHubRestEmitter` SDK (`MetadataChangeProposalWrapper`), um alle 13 Knoten deterministisch und unabhängig von Einzellauf-Zuständen atomar mit GMS (Port 8080) zu verdrahten.
      * Registriert Plattform-Typen (`kafka`, `mysql`, `file`, `pubsub`, `gcs`, `bigquery`, `dbt`), Tabellen-Beschreibungen und benutzerdefinierte Metadaten.
   4. **DataHub UI Quickstart & Governance Cockpit (`http://localhost:9002`):**
      * **Lineage Explorer:** Interaktiver Graph mit Upstream/Downstream Impact-Analyse auf Tabellen- und Spaltenebene.
-     * **Quality & Validation:** Sofortige Transparenz über Testläufe für Auditoren und Data Stewards.
+     * **Quality & Validation:** Sofortige Transparenz über Testläufe für Auditoren, Data Stewards und Compliance-Prüfer.
 
 ---
 
@@ -174,7 +174,7 @@ Release `v3.0.0` integriert **LinkedIn/Acryl DataHub** als zentrales Enterprise 
 
 ---
 
-## 📐 End-to-End Systemarchitektur (Release `v2.3.0` – Multi-Source Cloud Lakehouse, Hybrid Bridge & Automated Workflows)
+## 📐 End-to-End Systemarchitektur (Release `v3.0.0` – Multi-Source Cloud Lakehouse, Automated Workflows & DataHub Governance)
 
 ```mermaid
 flowchart TD
@@ -238,13 +238,74 @@ flowchart TD
         
         GCP_MON["Google Cloud Monitoring\n(Workflows + BigQuery + Pub/Sub + Scheduler)"] -.->|Serverless| GRAFANA["Grafana Cloud Dashboard\n(dashboards/youtube_dataops_monitoring.json)"]
     end
+
+    subgraph GovernancePlatform ["4. Enterprise Data Governance, Lineage & Quality Catalog (DataHub v0.13)"]
+        DATAHUB_GMS[("DataHub GMS Backend\n(http://localhost:8080)")]
+        DATAHUB_UI["DataHub Web UI\n(http://localhost:9002)"]
+        
+        EMITTER["governance/emit_full_lineage.py\n(DataHubRestEmitter)"] -->|13 Knoten Lineage MCP| DATAHUB_GMS
+        DBT_INGEST["governance/recipe_dbt.yaml\n(datahub ingest -c ...)"] -->|Manifest & 15 Assertions| DATAHUB_GMS
+        
+        KAFKA -.->|Lineage Node| EMITTER
+        CAT_JSON -.->|Lineage Node| EMITTER
+        MARIADB -.->|Lineage Node| EMITTER
+        GCS_B -.->|Lineage Node| EMITTER
+        GCS_S -.->|Lineage Node| EMITTER
+        GCS_CRM -.->|Lineage Node| EMITTER
+        FACT -.->|Lineage Node| EMITTER
+        
+        DATAHUB_GMS --> DATAHUB_UI
+    end
 ```
 
 ---
 
-## 🏛️ Das Kimball Star-Schema (Release `v2.3.0` – Multi-Source Enterprise DWH)
+## 🌐 DataHub Multi-Source Lineage Topologie (13 Knoten Detailansicht)
 
-Im Release `v2.3.0` wird das Star-Schema vom reinen YouTube-Silo zu einem **Multi-Source Enterprise Data Warehouse** ausgebaut:
+Die vollständige Enterprise-Lineage verbindet in DataHub (`http://localhost:9002`) deterministisch alle 13 Knoten über drei Quellwelten:
+
+```mermaid
+flowchart LR
+    subgraph SourceStreaming ["Quelle 1: Edge Streaming"]
+        KAFKA["kafka: topic_ingest\n(On-Prem KRaft)"] --> PUBSUB["pubsub: topic-youtube-ingest\n(Cloud Pub/Sub)"]
+        PUBSUB --> GCS_B["gcs: lakehouse/bronze\n(Bronze Parquet)"]
+    end
+
+    subgraph SourceRef ["Quelle 2: Referenzdaten"]
+        CAT_JSON["file: data/raw/US_category_id.json\n(JSON Dictionary)"]
+    end
+
+    subgraph SourceCRM ["Quelle 3: SaaS OLTP CRM"]
+        MARIADB["mysql: creator_contracts\n(MariaDB @ weltler.at)"] --> GCS_CRM["gcs: lakehouse/bronze/crm_contracts\n(CRM Parquet)"]
+        GCS_CRM --> EXT_CRM["bigquery: ext_creator_contracts\n(BigLake External Table)"]
+        EXT_CRM --> DIM_CRM["bigquery: dim_creator_contract\n(Conformed CRM Dimension)"]
+    end
+
+    GCS_B --> GCS_S["gcs: lakehouse/silver\n(GCS Silver Parquet & Iceberg)"]
+    CAT_JSON -->|Broadcast Join| GCS_S
+    CAT_JSON -->|Kategorie Taxonomie| DIM_CAT["bigquery: dim_category\n(Conformed Dimension)"]
+
+    GCS_S --> BQ_S["bigquery: silver_videos\n(GCS Load Table)"]
+    BQ_S --> STG["bigquery: stg_videos\n(Staging View)"]
+
+    STG --> DIM_V["bigquery: dim_video\n(SCD-2 Historisiert)"]
+    STG --> DIM_D["bigquery: dim_date\n(Datumsdimension)"]
+    STG --> DIM_CAT
+
+    STG --> DBT_FACT["dbt Model: fact_video_metrics\n(Transformation & Point-in-Time Join)"]
+    DIM_V --> DBT_FACT
+    DIM_CAT --> DBT_FACT
+    DIM_D --> DBT_FACT
+    DIM_CRM --> DBT_FACT
+
+    DBT_FACT --> BQ_FACT["bigquery: fact_video_metrics\n(Zentrale Faktentabelle mit Payout-KPI)"]
+```
+
+---
+
+## 🏛️ Das Kimball Star-Schema (Release `v3.0.0` – Multi-Source Enterprise DWH)
+
+Im Release `v3.0.0` ist das Star-Schema als **Multi-Source Enterprise Data Warehouse** vollständig in DataHub katalogisiert:
 * **Geschäftsprozess & Fakten-Granularität (Grain):** Exakt 1 Zeile pro YouTube-Video pro Trending-Tag (`metric_key = MD5(video_id + trending_date)`).
 * **Point-in-Time SCD-2 Join:** Die Faktentabelle verbindet sich über `video_key` atomar mit der zum `trending_date` gültigen Version der `dim_video`.
 * **Multi-Source Conformed Dimension:** `dim_creator_contract` führt Stammdaten und Vergütungsmodelle aus einer externen **MariaDB CRM-Datenbank** über die Conformed Natural Key Spalte `channel_title` zusammen.
@@ -317,19 +378,20 @@ erDiagram
 
 ---
 
-## 🚀 Deppensichere Schritt-für-Schritt Anleitung (Release `v2.3.0` – Multi-Source Cloud Lakehouse & Automated Workflows!)
+## 🚀 Deppensichere Schritt-für-Schritt Anleitung (Release `v3.0.0` – Multi-Source Cloud Lakehouse, Automated Workflows & DataHub Governance!)
 
-Befolge diese Schritte in deiner Windows PowerShell. Für Release `v2.3.0` musst du **weder Kafka, noch Airflow, noch lokales Prometheus, noch Docker starten** – sämtliche Parquets und Iceberg-Tabellen landen direkt im **Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, und **Google Cloud Workflows steuert den gesamten DWH-Aufbau End-to-End**!
+Befolge diese Schritte in deiner Windows PowerShell. Für Release `v3.0.0` musst du **weder Kafka, noch Airflow, noch lokales Prometheus starten** – sämtliche Parquets und Iceberg-Tabellen landen direkt im **Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, **Google Cloud Workflows steuert den DWH-Aufbau End-to-End**, und **DataHub visualisiert die lückenlose Governance & Quality Matrix**!
 
 ### 📋 Voraussetzungen
 1. **Windows 10 oder 11** mit PowerShell 5.1 oder PowerShell 7.
-2. **Python 3.10+** sowie **Terraform 1.17** auf dem System installiert.
-3. **Google Cloud Platform (GCP) Projekt:**
+2. **Docker Desktop** (wird für DataHub Quickstart auf Port 9002 benötigt).
+3. **Python 3.10+** sowie **Terraform 1.17** auf dem System installiert.
+4. **Google Cloud Platform (GCP) Projekt:**
    * Projekt-ID: `cloudanalytics-514018`
    * Region: `europe-west3` (Frankfurt) / Location: `EU`
-4. **GCP Service Account Key:**
+5. **GCP Service Account Key:**
    * Speichere den JSON-Schlüssel deines Service Accounts als **`gcp_service_account.json`** direkt im Hauptverzeichnis (`D:\Projekte\CloudEng\DE_Capstone_2026\gcp_service_account.json`).
-5. **Die 7 erforderlichen IAM-Rollen für den Service Account:**
+6. **Die 7 erforderlichen IAM-Rollen für den Service Account:**
    * `roles/bigquery.admin` (BigQuery Administrator)
    * `roles/storage.admin` (Storage Administrator)
    * `roles/pubsub.admin` (Pub/Sub Administrator – für Topics & Subscriptions)
@@ -337,7 +399,7 @@ Befolge diese Schritte in deiner Windows PowerShell. Für Release `v2.3.0` musst
    * `roles/cloudscheduler.admin` (Cloud Scheduler Administrator – für automatisierte Cron-Jobs)
    * `roles/iam.serviceAccountUser` (Dienstkonto-Nutzer)
    * `roles/monitoring.viewer` (Monitoring-Betrachter für Grafana Cloud)
-6. **Die 6 in GCP aktivierten APIs:**
+7. **Die 6 in GCP aktivierten APIs:**
    * `workflows.googleapis.com`, `monitoring.googleapis.com`, `pubsub.googleapis.com`, `bigquery.googleapis.com`, `storage.googleapis.com`, `cloudscheduler.googleapis.com`
 
 ---
@@ -449,7 +511,32 @@ Demonstriert die Anbindung von On-Premises-Systemen über eine ausfallsichere Br
 
 ---
 
-### Schritt 7: Observability in Grafana Cloud prüfen (Dauer: 1 Minute)
+### 🏛️ Schritt 7: Enterprise Data Governance & Quality Catalog in DataHub erkunden (Dauer: 2 Minuten) **[v3.0.0 Feature]**
+
+```powershell
+# 1. DataHub Docker Quickstart starten (falls nicht bereits aktiv):
+.\run_datahub.ps1 start
+
+# 2. Multi-Source Lineage aller 13 Knoten deterministisch an DataHub emittieren:
+.\run_datahub.ps1 emit
+
+# 3. dbt Core Manifest & alle 15 automatisierten Test-Assertions ingestieren:
+.\run_datahub.ps1 ingest-dbt
+```
+
+1. Öffne das DataHub Web-Cockpit im Browser: **`http://localhost:9002`** (Standard-Login: Benutzername `datahub`, Passwort `datahub`).
+2. **Lineage Explorer:** Suche oben nach `fact_video_metrics` und klicke auf den Tab **Lineage**.
+   * Aktiviere die Upstream- und Downstream-Knoten: Du siehst das vollständige Lineage-Netzwerk aller **13 Knoten** – von Kafka, MariaDB und der Category-JSON-Datei über GCS Bronze, GCS Silver, External Tables bis hin zu den vier Dimensionen, dem dbt Transformationsmodell und der BigQuery Faktentabelle!
+3. **Quality & Assertions:** Klicke auf den Tab **Qualität** (oder **Assertions**).
+   * Hier sind alle **15 dbt Data Tests** (Unique Keys, Not Null, referenzielle Integrität) als auditierbare Qualitätsprüfungen mit Historie und Status visualisiert.
+4. Nach der Inspektion können die Container jederzeit gestoppt werden:
+   ```powershell
+   .\run_datahub.ps1 stop
+   ```
+
+---
+
+### Schritt 8: Observability in Grafana Cloud prüfen (Dauer: 1 Minute)
 
 1. Öffne deine Grafana Cloud Instanz ([grafana.com](https://grafana.com)).
 2. Unter **Connections** -> **Data sources** -> **Google Cloud Monitoring** ist deine [`gcp_service_account.json`](gcp_service_account.json) hinterlegt (`Default Project: cloudanalytics-514018`).
@@ -458,7 +545,7 @@ Demonstriert die Anbindung von On-Premises-Systemen über eine ausfallsichere Br
 
 ---
 
-### Schritt 8: Ressourcen aufräumen & 0-€ Kostengarantie
+### Schritt 9: Ressourcen aufräumen & 0-€ Kostengarantie
 
 ```powershell
 # Sämtliche 11 Cloud-Ressourcen (GCS Bucket, BigQuery Dataset & Stored Procedures, Pub/Sub Topics & Subscriptions, Workflows, Cloud Scheduler) rückstandslos löschen:
@@ -502,17 +589,18 @@ Keine Architektur ist ohne Trade-offs. Für einen Einsatz im großskaligen Enter
 
 | Runner-Skript | Parameter / Aufruf | Release-Status & Verantwortlichkeit |
 | :--- | :--- | :--- |
-| [`run_pipeline.ps1`](run_pipeline.ps1) | Keine | 🟢 **`[v2.3 Active]` ⭐ Master-Runner:** Führt die komplette Cloud-Pipeline (`Pub/Sub Producer` -> `CRM REST-API Ingest` -> `GCS Bronze/DLQ` -> `GCS Silver/Iceberg` -> `Cloud Workflow E2E`) in einem Befehl aus. |
-| [`run_infra.ps1`](run_infra.ps1) | `init`, `plan`, `apply`, `destroy` | 🟢 **`[v2.3 Active]`** Steuert Terraform 1.17 in `infra/` (11 GCP-Ressourcen inkl. Cloud Scheduler, Pub/Sub & 3 Stored Procedures). |
-| [`run_pubsub_producer.ps1`](run_pubsub_producer.ps1) | Keine | 🟢 **`[v2.1 Active]`** Streamt Clean Events & DLQ Events serverlos an **Google Cloud Pub/Sub**. |
-| [`run_extract_crm.ps1`](run_extract_crm.ps1) | Keine | 🟢 **`[v2.3 Active]`** Fragt Creator-Verträge via HTTPS REST-API von MariaDB ab und schreibt serverlos direkt nach `gs://.../bronze/crm_contracts/`. |
-| [`run_bridge.ps1`](run_bridge.ps1) | Keine | 🟢 **`[v2.2 Active]`** Spiegelt Events resilient vom lokalen Kafka-Cluster (`127.0.0.1:9092`) nach Google Cloud Pub/Sub (`topic-youtube-ingest` & `dlq`). |
-| [`run_pubsub_bronze.ps1`](run_pubsub_bronze.ps1) | Keine | 🟢 **`[v2.1 Active]`** Zieht Clean Events aus `sub-youtube-ingest` und schreibt Parquet **direkt nach `gs://.../bronze/`** (0 lokale Dateien). |
-| [`run_pubsub_dlq.ps1`](run_pubsub_dlq.ps1) | Keine | 🟢 **`[v2.1 Active]`** Zieht Fehler-Events aus `sub-youtube-dlq` und schreibt Parquet **direkt nach `gs://.../quarantine/`** (0 lokale Dateien). |
-| [`run_silver.ps1`](run_silver.ps1) | Keine | 🟢 **`[v2.1 Active]`** Liest Bronze aus GCS, baut **Silver Parquet & Apache Iceberg V2 direkt in GCS (`gs://.../silver/` & `iceberg_warehouse/`)** und hält lokal 0 Parquets/Icebergs. |
-| [`run_workflow.ps1`](run_workflow.ps1) | Keine | 🟢 **`[v2.1 Active]`** Startet den **8-stufigen Google Cloud Workflow** (`GCS Load` -> `stg_videos` -> `dim_category` -> `dim_date` -> `dim_video SCD-2` -> `dim_creator_contract` -> `fact_video_metrics` -> `Quality Gate`). |
-| [`run_dbt.ps1`](run_dbt.ps1) | `debug`, `snapshot`, `run`, `test` | 🟢 **`[v2.0/v2.1 Active]`** Steuert dbt Core CLI (insb. `.\run_dbt.ps1 test` für die 15 automatisierten dbt Data Tests). |
-| [`load_to_bigquery.ps1`](load_to_bigquery.ps1)| Keine | 🟡 **`[v2.0/v2.1 Optional]`** Cloud-to-Cloud BigQuery Loader (`gs://.../silver/*.parquet` -> `silver_videos`; wird in `v2.1` bereits automatisch durch Schritt 1 in `run_workflow.ps1` erledigt). |
+| [`run_pipeline.ps1`](run_pipeline.ps1) | Keine | 🟢 **`[v3.0 Active]` ⭐ Master-Runner:** Führt die komplette Cloud-Pipeline (`Pub/Sub Producer` -> `CRM REST-API Ingest` -> `GCS Bronze/DLQ` -> `GCS Silver/Iceberg` -> `Cloud Workflow E2E`) in einem Befehl aus. |
+| [`run_datahub.ps1`](run_datahub.ps1) | `start`, `stop`, `emit`, `ingest-dbt`, `status` | 🟢 **`[v3.0 Active]` ⭐ DataHub Governance Runner:** Steuert DataHub Quickstart, emittiert die 13-Knoten Multi-Source Lineage und ingestiert 15 dbt Test Assertions. |
+| [`run_infra.ps1`](run_infra.ps1) | `init`, `plan`, `apply`, `destroy` | 🟢 **`[v3.0 Active]`** Steuert Terraform 1.17 in `infra/` (11 GCP-Ressourcen inkl. Cloud Scheduler, Pub/Sub & 3 Stored Procedures). |
+| [`run_pubsub_producer.ps1`](run_pubsub_producer.ps1) | Keine | 🟢 **`[v3.0 Active]`** Streamt Clean Events & DLQ Events serverlos an **Google Cloud Pub/Sub**. |
+| [`run_extract_crm.ps1`](run_extract_crm.ps1) | Keine | 🟢 **`[v3.0 Active]`** Fragt Creator-Verträge via HTTPS REST-API von MariaDB ab und schreibt serverlos direkt nach `gs://.../bronze/crm_contracts/`. |
+| [`run_bridge.ps1`](run_bridge.ps1) | Keine | 🟢 **`[v2.2/v3.0 Active]`** Spiegelt Events resilient vom lokalen Kafka-Cluster (`127.0.0.1:9092`) nach Google Cloud Pub/Sub (`topic-youtube-ingest` & `dlq`). |
+| [`run_pubsub_bronze.ps1`](run_pubsub_bronze.ps1) | Keine | 🟢 **`[v3.0 Active]`** Zieht Clean Events aus `sub-youtube-ingest` und schreibt Parquet **direkt nach `gs://.../bronze/`** (0 lokale Dateien). |
+| [`run_pubsub_dlq.ps1`](run_pubsub_dlq.ps1) | Keine | 🟢 **`[v3.0 Active]`** Zieht Fehler-Events aus `sub-youtube-dlq` und schreibt Parquet **direkt nach `gs://.../quarantine/`** (0 lokale Dateien). |
+| [`run_silver.ps1`](run_silver.ps1) | Keine | 🟢 **`[v3.0 Active]`** Liest Bronze aus GCS, baut **Silver Parquet & Apache Iceberg V2 direkt in GCS (`gs://.../silver/` & `iceberg_warehouse/`)** und hält lokal 0 Parquets/Icebergs. |
+| [`run_workflow.ps1`](run_workflow.ps1) | Keine | 🟢 **`[v3.0 Active]`** Startet den **8-stufigen Google Cloud Workflow** (`GCS Load` -> `stg_videos` -> `dim_category` -> `dim_date` -> `dim_video SCD-2` -> `dim_creator_contract` -> `fact_video_metrics` -> `Quality Gate`). |
+| [`run_dbt.ps1`](run_dbt.ps1) | `debug`, `snapshot`, `run`, `test` | 🟢 **`[v2.0/v3.0 Active]`** Steuert dbt Core CLI (insb. `.\run_dbt.ps1 test` für die 15 automatisierten dbt Data Tests). |
+| [`load_to_bigquery.ps1`](load_to_bigquery.ps1)| Keine | 🟡 **`[v2.0/v3.0 Optional]`** Cloud-to-Cloud BigQuery Loader (`gs://.../silver/*.parquet` -> `silver_videos`; wird in `v2.1` bereits automatisch durch Schritt 1 in `run_workflow.ps1` erledigt). |
 | [`start_kafka.ps1`](start_kafka.ps1) / [`stop_kafka.ps1`](stop_kafka.ps1) | Keine | 🟡 **`[v1.0/v2.0 Legacy / Optional]`** Startet/stoppt lokales Docker-Kafka *(in v2.1 durch Cloud Pub/Sub bzw. in v2.2 durch Hybrid Bridge ergänzt)*. |
 | [`run_producer.ps1`](run_producer.ps1), [`run_bronze.ps1`](run_bronze.ps1), [`run_dlq.ps1`](run_dlq.ps1) | Keine | 🟡 **`[v1.0/v2.0 Legacy / Optional]`** Lokale Kafka Producer/Consumer *(in v2.1 durch `run_pubsub_*.ps1` ersetzt)*. |
 | [`run_gold.ps1`](run_gold.ps1) | Keine | 🔴 **`[v1.0 Legacy]`** Altes Spark-Gold-Skript *(ab v2.0 durch Star-Schema abgelöst)*. |
@@ -589,6 +677,7 @@ DE_Capstone_2026/
 │   ├── producer.py, consumer_*.py          # 🟡 [v1.0/v2.0 Optional] Lokale Kafka Skripte
 │   └── transform_gold.py                   # 🔴 [v1.0 Legacy] Altes Spark-Gold Skript
 ├── run_pipeline.ps1                        # 🟢 [v3.0 Active] ⭐ One-Click Master-Runner für die gesamte Cloud-Pipeline
+├── run_datahub.ps1                         # 🟢 [v3.0 Active] ⭐ Runner: DataHub Quickstart, REST Lineage & Test Ingestion
 ├── run_infra.ps1                           # 🟢 [v3.0 Active] Runner: Terraform CLI (init, plan, apply, destroy)
 ├── run_pubsub_producer.ps1                 # 🟢 [v3.0 Active] Runner: Serverless GCP Pub/Sub Producer
 ├── run_extract_crm.ps1                     # 🟢 [v3.0 Active] Runner: Multi-Source CRM REST-API Extractor direkt nach GCS
@@ -599,7 +688,7 @@ DE_Capstone_2026/
 ├── run_workflow.ps1                        # 🟢 [v3.0 Active] Runner: End-to-End Google Cloud Workflow
 ├── run_dbt.ps1                             # 🟢 [v2.0/v3.0 Active] Runner: dbt CLI (15 Data Quality Tests)
 ├── load_to_bigquery.ps1                    # 🟡 [v2.0/v3.0 Optional] Runner: Cloud-to-Cloud BigQuery Loader
-├── requirements.txt                        # 🟢 [v3.0 Active] Python-Abhängigkeiten
+├── requirements.txt                        # 🟢 [v3.0 Active] Python-Abhängigkeiten (inkl. acryl-datahub)
 └── README.md                               # 🟢 [v3.0 Active] Vollständige Projektdokumentation
 ```
 
