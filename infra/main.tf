@@ -47,11 +47,44 @@ resource "google_pubsub_subscription" "youtube_dlq_sub" {
   ack_deadline_seconds = 20
 }
 
-# 5. Der Serverless Cloud Workflow (Nutzt den existierenden Service Account)
+# 5. BigQuery Stored Procedures (Pattern B: Saubere SQL-Auslagerung in infra/sql/*.sql)
+resource "google_bigquery_routine" "sp_build_stg_videos" {
+  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id
+  routine_id      = "sp_build_stg_videos"
+  routine_type    = "PROCEDURE"
+  language        = "SQL"
+  description     = "Erzeugt den idempotenten, deduplizierten Staging-View stg_videos"
+  definition_body = file("${path.module}/sql/01_sp_build_stg_videos.sql")
+}
+
+resource "google_bigquery_routine" "sp_build_dimensions" {
+  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id
+  routine_id      = "sp_build_dimensions"
+  routine_type    = "PROCEDURE"
+  language        = "SQL"
+  description     = "Baut dim_category, dim_date und die SCD-2 Dimension dim_video (inkl. LEAD-Timeline) auf"
+  definition_body = file("${path.module}/sql/02_sp_build_dimensions.sql")
+}
+
+resource "google_bigquery_routine" "sp_refresh_fact_table" {
+  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id
+  routine_id      = "sp_refresh_fact_table"
+  routine_type    = "PROCEDURE"
+  language        = "SQL"
+  description     = "Baut fact_video_metrics mittels Point-in-Time SCD-2 Join gegen dim_video auf"
+  definition_body = file("${path.module}/sql/03_sp_refresh_fact_table.sql")
+}
+
+# 6. Der Serverless Cloud Workflow (Nutzt den existierenden Service Account)
 resource "google_workflows_workflow" "youtube_dataops_pipeline" {
   name            = "youtube-dataops-pipeline"
   region          = var.region
   description     = "Serverlose Orchestrierung für YouTube DWH Star-Schema & Quality Gates"
   service_account = var.service_account_email
   source_contents = file("${path.module}/workflows/pipeline.yaml")
+  depends_on = [
+    google_bigquery_routine.sp_build_stg_videos,
+    google_bigquery_routine.sp_build_dimensions,
+    google_bigquery_routine.sp_refresh_fact_table
+  ]
 }

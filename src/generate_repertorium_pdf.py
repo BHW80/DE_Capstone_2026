@@ -389,8 +389,8 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         [P("<b>5. Ephemerer Compute & Open Table Format (Apache Iceberg V2)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(5, '-')}", s['td'])],
         [P("<b>6. Cloud Data Warehouse & Kimball Star-Schema (dbt Core & SCD-2)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(6, '-')}", s['td'])],
         [P("<b>7. DataOps Quality Gates: 15 dbt Tests & In-Workflow Validierung</b>", s['td_bold']), P(f"Seite {chapter_pages.get(7, '-')}", s['td'])],
-        [P("<b>8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning — 7 GCP Ressourcen)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(8, '-')}", s['td'])],
-        [P("<b>9. Serverlose Orchestrierung (Google Cloud Workflows State-Machine)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(9, '-')}", s['td'])],
+        [P("<b>8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning — 10 GCP Ressourcen & Stored Procedures)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(8, '-')}", s['td'])],
+        [P("<b>9. Serverlose Orchestrierung (Google Cloud Workflows & Pattern B Stored Procedures)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(9, '-')}", s['td'])],
         [P("<b>10. Cloud-Native Observability (Grafana Cloud & GCP Monitoring - Weg 1)</b>", s['td_bold']), P(f"Seite {chapter_pages.get(10, '-')}", s['td'])],
         [P("<b>11. DataOps CI/CD Pipelines, GitOps & Release-Management</b>", s['td_bold']), P(f"Seite {chapter_pages.get(11, '-')}", s['td'])],
         [P("<b>12. Architectural Decision Records (ADRs 001–007) & Kritische Enterprise-Risikoanalyse</b>", s['td_bold']), P(f"Seite {chapter_pages.get(12, '-')}", s['td'])],
@@ -831,8 +831,11 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "|           |-- fact_video_metrics.sql    # [v2.0 Active] Fakten mit Point-in-Time SCD-2 Join\n"
         "|           +-- schema.yml                # [v2.0 Active] 15 automatisierte dbt Quality Gate Tests\n"
         "|-- infra/                                # [v2.1 Active] Infrastructure as Code (Terraform 1.17)\n"
-        "|   |-- versions.tf, variables.tf, main.tf# [v2.1 Active] 7 GCP Ressourcen (GCS, BQ, 2x Topic, 2x Sub, Workflow)\n"
-        "|   +-- workflows/pipeline.yaml           # [v2.1 Active] 8-Stufen End-to-End Cloud Workflow (GCS->BQ->Star-Schema->Gate)\n"
+        "|   |-- versions.tf, variables.tf, main.tf# [v2.1 Active] 10 GCP Ressourcen (GCS, BQ, 2x Topic, 2x Sub, 3x SP, Workflow)\n"
+        "|   |-- sql/01_sp_build_stg_videos.sql    # [v2.1 Active] Pattern B Stored Procedure: Idempotenter Staging View\n"
+        "|   |-- sql/02_sp_build_dimensions.sql    # [v2.1 Active] Pattern B Stored Procedure: dim_category, dim_date & SCD-2 dim_video\n"
+        "|   |-- sql/03_sp_refresh_fact_table.sql  # [v2.1 Active] Pattern B Stored Procedure: fact_video_metrics (Point-in-Time Join)\n"
+        "|   +-- workflows/pipeline.yaml           # [v2.1 Active] End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)\n"
         "|-- data/                                 # [v1.0-v2.1] Lokale Ausgangslage (0 lokale Parquets/Icebergs!)\n"
         "|   |-- raw/US_category_id.json           # [Ausgangslage] Statische YouTube-Kategorie-Referenz\n"
         "|   +-- sample/us_videos_mini_500.csv     # [Ausgangslage] 500 YouTube-Trending-Events fuer das Streaming\n"
@@ -1266,18 +1269,18 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
     # KAPITEL 8: INFRASTRUCTURE AS CODE (TERRAFORM 1.17)
     # =========================================================================
     story.extend(track(8))
-    story.append(P("8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning — 7 GCP Ressourcen)", s['h1']))
+    story.append(P("8. Infrastructure as Code (Terraform 1.17 Cloud Provisioning — 10 GCP Ressourcen & Stored Procedures)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
     story.append(P(
         "Manuelles Zusammenklicken von Cloud-Ressourcen ('ClickOps') führt unweigerlich zu Konfigurations-Drift "
         "und nicht reproduzierbaren Umgebungen. In Release `v2.1.0` wird die gesamte Google Cloud Infrastruktur "
-        "über **Terraform 1.17** (`infra/main.tf`, `infra/variables.tf`, `infra/versions.tf`) deklarativ verwaltet "
+        "inklusive der **3 BigQuery Stored Procedures (`infra/sql/*.sql`)** über **Terraform 1.17** (`infra/main.tf`, `infra/variables.tf`, `infra/versions.tf`) deklarativ verwaltet "
         "und über den PowerShell-Wrapper `run_infra.ps1` gesteuert.",
         s['body']
     ))
 
-    story.append(P("8.1 Die 7 bereitgestellten Google Cloud Ressourcen im Detail", s['h2']))
+    story.append(P("8.1 Die 10 bereitgestellten Google Cloud Ressourcen im Detail", s['h2']))
 
     tf_res_data = [
         [P("<b>Terraform Ressource</b>", s['th']), P("<b>Live GCP Name / ID</b>", s['th']), P("<b>Konfiguration & FinOps-Schutz</b>", s['th'])],
@@ -1292,32 +1295,27 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
             P("Location `EU`, `delete_contents_on_destroy = true` (garantiert rückstandsloses Löschen bei `destroy`).", s['td'])
         ],
         [
-            P("`google_pubsub_topic`<br/>`.youtube_ingest`", s['td_bold']),
-            P("`topic-youtube-ingest`", s['td']),
-            P("Serverloses Cloud-Pub/Sub-Topic für den regulären Event-Ingest-Strom (444 Clean Events).", s['td'])
+            P("`google_pubsub_topic` (2x)<br/>`.youtube_ingest` / `.youtube_dlq`", s['td_bold']),
+            P("`topic-youtube-ingest`<br/>`topic-youtube-dlq`", s['td']),
+            P("Serverlose Cloud-Pub/Sub-Topics für den regulären Event-Strom (~440 Clean) und die DLQ (~60 Fehler).", s['td'])
         ],
         [
-            P("`google_pubsub_subscription`<br/>`.youtube_ingest_sub`", s['td_bold']),
-            P("`sub-youtube-ingest`", s['td']),
-            P("Pull-Subscription für `run_pubsub_bronze.ps1` (`ack_deadline_seconds = 60`, Retention 7 Tage).", s['td'])
+            P("`google_pubsub_subscription` (2x)<br/>`.youtube_ingest_sub` / `.dlq_sub`", s['td_bold']),
+            P("`sub-youtube-ingest`<br/>`sub-youtube-dlq`", s['td']),
+            P("Pull-Subscriptions für `run_pubsub_bronze.ps1` & `run_pubsub_dlq.ps1` (`ack_deadline_seconds = 20`).", s['td'])
         ],
         [
-            P("`google_pubsub_topic`<br/>`.youtube_dlq`", s['td_bold']),
-            P("`topic-youtube-dlq`", s['td']),
-            P("Serverloses Cloud-Pub/Sub-Topic für isolierte Dead-Letter-Queue-Nachrichten (56 DLQ Events).", s['td'])
-        ],
-        [
-            P("`google_pubsub_subscription`<br/>`.youtube_dlq_sub`", s['td_bold']),
-            P("`sub-youtube-dlq`", s['td']),
-            P("Pull-Subscription für `run_pubsub_dlq.ps1` (`ack_deadline_seconds = 60`, Retention 7 Tage).", s['td'])
+            P("`google_bigquery_routine` (3x)<br/>`.sp_build_stg_videos`<br/>`.sp_build_dimensions`<br/>`.sp_refresh_fact_table`", s['td_bold']),
+            P("`sp_build_stg_videos`<br/>`sp_build_dimensions`<br/>`sp_refresh_fact_table`", s['td']),
+            P("<b>Pattern B (Stored Procedures):</b> Kapselt die formatierten SQL-Dateien aus `infra/sql/*.sql` als wartbare, in BigQuery direkt debuggbare Routinen.", s['td'])
         ],
         [
             P("`google_workflows_workflow`<br/>`.youtube_dataops_pipeline`", s['td_bold']),
             P("`youtube-dataops-pipeline`", s['td']),
-            P("Region `europe-west3` (Frankfurt), nutzt `var.service_account_email` und injiziert `workflows/pipeline.yaml`.", s['td'])
+            P("Region `europe-west3` (Frankfurt), nutzt `var.service_account_email` und führt `workflows/pipeline.yaml` aus.", s['td'])
         ]
     ]
-    t_tf = Table(tf_res_data, colWidths=[130, 145, 220])
+    t_tf = Table(tf_res_data, colWidths=[135, 140, 220])
     t_tf.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), s['primary']),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
@@ -1329,51 +1327,40 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
     story.append(t_tf)
     story.append(Spacer(1, 6))
 
-    story.append(P("8.2 Vollständiger Code von `infra/main.tf` (7 GCP Ressourcen)", s['h2']))
+    story.append(P("8.2 Auszug aus `infra/main.tf` (10 GCP Ressourcen inkl. Stored Procedures)", s['h2']))
     code_tf = (
-        "# infra/main.tf (Vollstaendiger Original-Code: 7 GCP Ressourcen)\n"
-        "provider \"google\" {\n"
-        "  project     = var.project_id\n"
-        "  region      = var.region\n"
-        "  credentials = file(var.credentials_file)\n"
+        "# infra/main.tf (Original-Auszug: Stored Procedures & Cloud Workflow)\n"
+        "resource \"google_bigquery_routine\" \"sp_build_stg_videos\" {\n"
+        "  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id\n"
+        "  routine_id      = \"sp_build_stg_videos\"\n"
+        "  routine_type    = \"PROCEDURE\"\n"
+        "  language        = \"SQL\"\n"
+        "  definition_body = file(\"${path.module}/sql/01_sp_build_stg_videos.sql\")\n"
         "}\n\n"
-        "resource \"google_storage_bucket\" \"lakehouse_storage\" {\n"
-        "  name                        = \"lakehouse-youtube-${var.project_id}\"\n"
-        "  location                    = var.location\n"
-        "  force_destroy               = true\n"
-        "  uniform_bucket_level_access = true\n"
-        "  versioning { enabled = true }\n"
+        "resource \"google_bigquery_routine\" \"sp_build_dimensions\" {\n"
+        "  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id\n"
+        "  routine_id      = \"sp_build_dimensions\"\n"
+        "  routine_type    = \"PROCEDURE\"\n"
+        "  language        = \"SQL\"\n"
+        "  definition_body = file(\"${path.module}/sql/02_sp_build_dimensions.sql\")\n"
         "}\n\n"
-        "resource \"google_bigquery_dataset\" \"youtube_analytics\" {\n"
-        "  dataset_id                 = \"youtube_analytics\"\n"
-        "  friendly_name              = \"YouTube Video Analytics DWH\"\n"
-        "  location                   = var.location\n"
-        "  delete_contents_on_destroy = true\n"
-        "}\n\n"
-        "resource \"google_pubsub_topic\" \"youtube_ingest\" {\n"
-        "  name = \"topic-youtube-ingest\"\n"
-        "}\n\n"
-        "resource \"google_pubsub_subscription\" \"youtube_ingest_sub\" {\n"
-        "  name                       = \"sub-youtube-ingest\"\n"
-        "  topic                      = google_pubsub_topic.youtube_ingest.name\n"
-        "  ack_deadline_seconds       = 60\n"
-        "  message_retention_duration = \"604800s\"\n"
-        "}\n\n"
-        "resource \"google_pubsub_topic\" \"youtube_dlq\" {\n"
-        "  name = \"topic-youtube-dlq\"\n"
-        "}\n\n"
-        "resource \"google_pubsub_subscription\" \"youtube_dlq_sub\" {\n"
-        "  name                       = \"sub-youtube-dlq\"\n"
-        "  topic                      = google_pubsub_topic.youtube_dlq.name\n"
-        "  ack_deadline_seconds       = 60\n"
-        "  message_retention_duration = \"604800s\"\n"
+        "resource \"google_bigquery_routine\" \"sp_refresh_fact_table\" {\n"
+        "  dataset_id      = google_bigquery_dataset.youtube_analytics.dataset_id\n"
+        "  routine_id      = \"sp_refresh_fact_table\"\n"
+        "  routine_type    = \"PROCEDURE\"\n"
+        "  language        = \"SQL\"\n"
+        "  definition_body = file(\"${path.module}/sql/03_sp_refresh_fact_table.sql\")\n"
         "}\n\n"
         "resource \"google_workflows_workflow\" \"youtube_dataops_pipeline\" {\n"
         "  name            = \"youtube-dataops-pipeline\"\n"
         "  region          = var.region\n"
-        "  description     = \"Serverlose Orchestrierung fuer YouTube DWH Star-Schema & Quality Gates\"\n"
         "  service_account = var.service_account_email\n"
         "  source_contents = file(\"${path.module}/workflows/pipeline.yaml\")\n"
+        "  depends_on      = [\n"
+        "    google_bigquery_routine.sp_build_stg_videos,\n"
+        "    google_bigquery_routine.sp_build_dimensions,\n"
+        "    google_bigquery_routine.sp_refresh_fact_table\n"
+        "  ]\n"
         "}"
     )
     story.append(make_code_block(code_tf, s))
@@ -1383,7 +1370,7 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
     # KAPITEL 9: SERVERLOSE ORCHESTRIERUNG (GOOGLE CLOUD WORKFLOWS)
     # =========================================================================
     story.extend(track(9))
-    story.append(P("9. Serverlose Orchestrierung (Google Cloud Workflows State-Machine)", s['h1']))
+    story.append(P("9. Serverlose Orchestrierung (Google Cloud Workflows & Pattern B Stored Procedures)", s['h1']))
     story.append(HRFlowable(width="100%", thickness=1, color=s['primary'], spaceAfter=10))
 
     story.append(P(
@@ -1394,20 +1381,18 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         s['body']
     ))
 
-    story.append(P("9.1 Architektur & 8-Stufen End-to-End Orchestrierung in `infra/workflows/pipeline.yaml`", s['h2']))
+    story.append(P("9.1 Architektur-Pattern B: Trennung von Orchestrierung (`pipeline.yaml`) und SQL (`infra/sql/*.sql`)", s['h2']))
     story.append(P(
-        "Die State-Machine nutzt den offiziellen Google Cloud BigQuery Connector (`googleapis.bigquery.v2.jobs.query`) "
-        "und steuert den **gesamten Cloud-Lakehouse-zu-DWH-Fluss End-to-End in 8 Schritten** direkt in der Google Cloud:",
+        "Anstatt komplexe SQL-Statements als schwer wartbare Teilstrings in einer YAML-Datei zu zerstückeln, "
+        "setzt die Plattform **Pattern B (BigQuery Stored Procedures + Cloud Workflows)** um:",
         s['body']
     ))
-    story.append(P("• <b>Schritt 1 (`load_gcs_silver_to_bq`):</b> Führt `LOAD DATA OVERWRITE` direkt von `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` in die BigQuery-Tabelle `silver_videos` aus (100% Cloud-to-Cloud ohne lokalen Upload).", s['bullet']))
-    story.append(P("• <b>Schritt 2–5 (`check_silver_data`, `build_stg_videos`, `build_dim_category`, `build_dim_date`):</b> Prüft die Zeilenanzahl und erzeugt idempotent den deduplizierten Staging-View sowie die Kategorie- und Kalender-Dimensionen.", s['bullet']))
-    story.append(P("• <b>Schritt 6 (`build_dim_video_scd2`):</b> Berechnet die SCD-2 Dimension `dim_video` mit deterministischer `LEAD()`-Window-Timeline (`valid_from`, `valid_to`, `is_current`), sodass alle 3 historischen Titelversionen des Videos `2kyS6SvSYSE` innerhalb eines Micro-Batches lückenlos erhalten bleiben.", s['bullet']))
-    story.append(P("• <b>Schritt 7 & 8 (`refresh_fact_table`, `quality_gate_validation`, `evaluate_quality_gate`):</b> Baut `fact_video_metrics` mittels Point-in-Time Join auf und prüft anschließend per `LEFT JOIN`, dass exakt 0 verwaiste Fremdschlüssel existieren (`raise` bei Fehlern). Alle `${...}`-Ausdrücke halten das 400-Zeichen-Parser-Limit von Cloud Workflows strikt ein.", s['bullet']))
+    story.append(P("• <b>Saubere `.sql`-Dateien mit vollem IDE-Support (`infra/sql/`):</b> Die SQL-Logik liegt formatiert und kommentiert in `01_sp_build_stg_videos.sql`, `02_sp_build_dimensions.sql` und `03_sp_refresh_fact_table.sql`. Dadurch lassen sich Queries jederzeit in der BigQuery-Konsole oder via `dbt` direkt debuggen und weiterentwickeln.", s['bullet']))
+    story.append(P("• <b>Schlanke `CALL`-Orchestrierung ohne 400-Zeichen-Limit:</b> `pipeline.yaml` lädt in Schritt 1 die Parquet-Daten per `LOAD DATA OVERWRITE` aus `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` nach BigQuery, ruft danach nacheinander `CALL sp_build_stg_videos()`, `CALL sp_build_dimensions()` (inkl. SCD-2 `LEAD()`-Timeline für `2kyS6SvSYSE`) und `CALL sp_refresh_fact_table()` auf und sichert das Ergebnis über das Foreign-Key Quality Gate (`invalid_count == 0`) ab.", s['bullet']))
 
-    story.append(P("9.2 Auszug der zentralen Schritte aus `infra/workflows/pipeline.yaml`", s['h2']))
+    story.append(P("9.2 Vollständiger Code von `infra/workflows/pipeline.yaml` (Pattern B)", s['h2']))
     code_workflow = (
-        "# infra/workflows/pipeline.yaml (8-Stufen End-to-End Cloud Workflow State-Machine)\n"
+        "# infra/workflows/pipeline.yaml (Vollstaendiger Original-Code: Pattern B Stored Procedures)\n"
         "main:\n"
         "  params: [args]\n"
         "  steps:\n"
@@ -1415,44 +1400,71 @@ def generate_story(s, chapter_pages=None, tracker_dict=None):
         "        assign:\n"
         "          - project_id: \"cloudanalytics-514018\"\n"
         "          - dataset_id: \"youtube_analytics\"\n"
-        "          - gcs_silver_uri: \"gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet\"\n"
-        "    - prepare_load_silver_query:\n"
+        "          - bucket_uri: \"gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet\"\n"
+        "    - prepare_load_query:\n"
         "        assign:\n"
-        "          - q_load_1: ${\"LOAD DATA OVERWRITE `\" + project_id + \".\" + dataset_id + \".silver_videos` \"}\n"
-        "          - q_load_2: ${\"FROM FILES (format = 'PARQUET', uris = ['\" + gcs_silver_uri + \"'])\"}\n"
-        "          - load_silver_query: ${q_load_1 + q_load_2}\n"
+        "          - l_p1: ${\"LOAD DATA OVERWRITE `\" + project_id + \".\" + dataset_id + \".silver_videos` \"}\n"
+        "          - l_p2: ${\"FROM FILES (format = 'PARQUET', uris = ['\" + bucket_uri + \"'])\"}\n"
+        "          - load_query: ${l_p1 + l_p2}\n"
         "    - load_gcs_silver_to_bq:\n"
         "        call: googleapis.bigquery.v2.jobs.query\n"
         "        args:\n"
         "          projectId: ${project_id}\n"
         "          body:\n"
-        "            query: ${load_silver_query}\n"
+        "            query: ${load_query}\n"
         "            useLegacySql: false\n"
-        "        result: load_silver_result\n"
-        "    # ... [Schritte 2-5: check_silver_data, build_stg_videos, build_dim_category, build_dim_date] ...\n"
-        "    - prepare_dim_video_query:\n"
-        "        assign:\n"
-        "          - q_dv_1: ${\"CREATE OR REPLACE TABLE `\" + project_id + \".\" + dataset_id + \".dim_video` AS \"}\n"
-        "          - q_dv_2: \"WITH v_versions AS (SELECT video_id, title, channel_title, category_id, tags, MIN(trending_date) AS v_start \"\n"
-        "          - q_dv_3: ${\"FROM `\" + project_id + \".\" + dataset_id + \".stg_videos` GROUP BY 1, 2, 3, 4, 5), \"}\n"
-        "          - q_dv_4: \"v_scd2 AS (SELECT *, CAST(v_start AS TIMESTAMP) AS valid_from, \"\n"
-        "          - q_dv_5: \"LEAD(CAST(v_start AS TIMESTAMP)) OVER (PARTITION BY video_id ORDER BY v_start ASC) AS valid_to FROM v_versions) \"\n"
-        "          - q_dv_6: \"SELECT TO_HEX(MD5(CONCAT(video_id, '_', CAST(valid_from AS STRING)))) AS video_key, \"\n"
-        "          - q_dv_7: \"video_id, title, channel_title, category_id, tags, valid_from, valid_to, (valid_to IS NULL) AS is_current FROM v_scd2\"\n"
-        "          - dim_video_query: ${q_dv_1 + q_dv_2 + q_dv_3 + q_dv_4 + q_dv_5 + q_dv_6 + q_dv_7}\n"
-        "    - build_dim_video_scd2:\n"
+        "        result: load_result\n"
+        "    - check_silver_data:\n"
         "        call: googleapis.bigquery.v2.jobs.query\n"
         "        args:\n"
         "          projectId: ${project_id}\n"
         "          body:\n"
-        "            query: ${dim_video_query}\n"
+        "            query: ${\"SELECT count(*) as total_records FROM `\" + project_id + \".\" + dataset_id + \".silver_videos`\"}\n"
         "            useLegacySql: false\n"
-        "    # ... [Schritt 7 & 8: refresh_fact_table -> quality_gate_validation -> evaluate_quality_gate] ...\n"
+        "        result: silver_check_result\n"
+        "    - build_stg_videos:\n"
+        "        call: googleapis.bigquery.v2.jobs.query\n"
+        "        args:\n"
+        "          projectId: ${project_id}\n"
+        "          body:\n"
+        "            query: ${\"CALL `\" + project_id + \".\" + dataset_id + \".sp_build_stg_videos`();\"}\n"
+        "            useLegacySql: false\n"
+        "        result: stg_result\n"
+        "    - build_dimensions_scd2:\n"
+        "        call: googleapis.bigquery.v2.jobs.query\n"
+        "        args:\n"
+        "          projectId: ${project_id}\n"
+        "          body:\n"
+        "            query: ${\"CALL `\" + project_id + \".\" + dataset_id + \".sp_build_dimensions`();\"}\n"
+        "            useLegacySql: false\n"
+        "        result: dims_result\n"
+        "    - refresh_fact_table:\n"
+        "        call: googleapis.bigquery.v2.jobs.query\n"
+        "        args:\n"
+        "          projectId: ${project_id}\n"
+        "          body:\n"
+        "            query: ${\"CALL `\" + project_id + \".\" + dataset_id + \".sp_refresh_fact_table`();\"}\n"
+        "            useLegacySql: false\n"
+        "        result: fact_refresh_result\n"
+        "    - quality_gate_validation:\n"
+        "        call: googleapis.bigquery.v2.jobs.query\n"
+        "        args:\n"
+        "          projectId: ${project_id}\n"
+        "          body:\n"
+        "            query: ${\"SELECT count(*) as invalid_keys FROM `\" + project_id + \".\" + dataset_id + \".fact_video_metrics` f LEFT JOIN `\" + project_id + \".\" + dataset_id + \".dim_video` v ON f.video_key = v.video_key WHERE v.video_key IS NULL\"}\n"
+        "            useLegacySql: false\n"
+        "        result: quality_result\n"
+        "    - get_quality_result:\n"
+        "        assign:\n"
+        "          - invalid_count: ${int(quality_result.rows[0].f[0].v)}\n"
+        "    - evaluate_quality_gate:\n"
+        "        switch:\n"
+        "          - condition: ${invalid_count > 0}\n"
+        "            raise: ${\"Quality Gate FAILED! Found \" + string(invalid_count) + \" orphan records in fact_video_metrics.\"}\n"
         "    - finish_success:\n"
         "        return:\n"
         "          status: \"SUCCESS\"\n"
-        "          silver_rows_loaded: ${silver_rows}\n"
-        "          message: \"Full End-to-End Cloud Lakehouse & Star-Schema Pipeline completed successfully (GCS -> Silver -> Staging -> SCD-2 Dims -> Fact -> 0 Quality Errors).\""
+        "          message: \"Full End-to-End Cloud Lakehouse & Star-Schema Pipeline (Pattern B: Stored Procedures) completed successfully. 0 quality errors detected.\""
     )
     story.append(make_code_block(code_workflow, s))
     story.append(PageBreak())

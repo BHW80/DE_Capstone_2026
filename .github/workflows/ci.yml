@@ -32,10 +32,11 @@ jobs:
           python -m compileall src/
           flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      - name: Validate Cloud Workflows YAML
+      - name: Validate Cloud Workflows YAML & Stored Procedures SQL
         run: |
           python -c "import yaml; yaml.safe_load(open('infra/workflows/pipeline.yaml'))"
-          echo "Cloud Workflows pipeline.yaml is valid YAML!"
+          python -c "import glob; files=sorted(glob.glob('infra/sql/*.sql')); assert len(files)==3; [assert_ok := (open(f).read().strip().endswith('END;')) for f in files]"
+          echo "Cloud Workflows pipeline.yaml and all 3 BigQuery Stored Procedures are valid!"
 
       - name: Validate Grafana Dashboard JSON
         run: |

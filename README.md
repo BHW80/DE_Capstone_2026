@@ -25,7 +25,7 @@ Dieses Repository dokumentiert die vollständige Evolution eines universitären 
 ```
 v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2.1.0 (Serverless Cloud & Observability)
 ┌───────────────────────────────┐    ┌────────────────────────────────────────┐ ┌──────────────────────────────────────────────┐
-│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Table Format (ACID)│ │ • Terraform IaC (7 GCP-Ressourcen)           │
+│ • Kafka KRaft (Zero-ZooKeeper)│    │ • Apache Iceberg V2 Table Format (ACID)│ │ • Terraform IaC (10 GCP-Ressourcen + SPs)    │
 │ • Lokale Dead Letter Queue    │───►│ • dbt SCD-2 Dimension & Snapshots      │►│ • Cloud Pub/Sub Streaming (ersetzt Kafka!)   │
 │ • Ephemerer Docker PySpark    │    │ • 15 Automatisierte dbt Quality Gates  │ │ • Google Cloud Workflows (ersetzt Airflow!)  │
 │ • Lokaler Airflow 2.9 Stack   │    │ • BigQuery Star-Schema Materialisierung│ │ • Cloud-Native Grafana Cloud (Weg 1)         │
@@ -70,23 +70,21 @@ v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2
 **Zielsetzung:** Vollständige Eliminierung sowohl lokaler Infrastruktur-Container (kein Kafka, kein Airflow, kein lokales Prometheus nötig) **als auch lokaler Parquet- und Iceberg-Zwischenordner**! Abseits der Ausgangslage (`data/sample/` und `data/raw/`) liegen **sämtliche Parquets und das Apache Iceberg V2 Warehouse im Google Cloud Storage Bucket (`gs://lakehouse-youtube-cloudanalytics-514018/`)**, und **Google Cloud Workflows steuert den gesamten Cloud-DWH-Ablauf End-to-End**.
 
 * **Prozessablauf (`v2.1.0` – Aktueller Produktionsstandard, auch als One-Click via `.\run_pipeline.ps1`):**
-  1. **Infrastructure as Code (Terraform 1.17):** `run_infra.ps1 apply` provisioniert vollautomatisch **7 Google Cloud Ressourcen**: GCS Lakehouse Bucket (`gs://lakehouse-youtube-cloudanalytics-514018`), BigQuery Dataset (`youtube_analytics`), 2 Cloud Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), 2 Cloud Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`) sowie den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`).
+  1. **Infrastructure as Code (Terraform 1.17):** `run_infra.ps1 apply` provisioniert vollautomatisch **10 Google Cloud Ressourcen**: GCS Lakehouse Bucket (`gs://lakehouse-youtube-cloudanalytics-514018`), BigQuery Dataset (`youtube_analytics`), 2 Cloud Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), 2 Cloud Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`), **3 BigQuery Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table` aus `infra/sql/*.sql`)** sowie den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`).
   2. **Serverless Cloud Streaming direkt in den GCS Lakehouse Bucket (0 lokale Parquet-Dateien!):**
      * `run_pubsub_producer.ps1` (`src/cloud_pubsub_producer.py`) sendet die validen Events (inkl. 3 SCD-2 Mutationen für `2kyS6SvSYSE`) direkt per HTTPS/REST an `topic-youtube-ingest` und die korrupten DLQ-Events (~10 %) an `topic-youtube-dlq`.
      * `run_pubsub_bronze.ps1` (`src/cloud_pubsub_consumer_bronze.py`) und `run_pubsub_dlq.ps1` (`src/cloud_pubsub_consumer_dlq.py`) ziehen & bestätigen (`acknowledge`) die Nachrichten aus `sub-youtube-ingest` bzw. `sub-youtube-dlq`, erzeugen die Parquet-Dateien **in-memory** und schreiben sie **direkt in den GCS-Bucket** (`gs://lakehouse-youtube-cloudanalytics-514018/bronze/` und `gs://.../quarantine/`).
   3. **Cloud Silver & Apache Iceberg V2 direkt im GCS Bucket (`run_silver.ps1` -> `src/cloud_silver_gcs.py`):**
      * Liest die Bronze-Parquets direkt aus `gs://lakehouse-youtube-cloudanalytics-514018/bronze/`, führt die Typisierung und den Kategorie-Join gegen `data/raw/US_category_id.json` aus und schreibt sowohl `silver/silver_videos.parquet` als auch das **Apache Iceberg V2 Warehouse (`iceberg_warehouse/silver/videos/metadata/` & `data/`) direkt in den GCS-Bucket `gs://lakehouse-youtube-cloudanalytics-514018/`**.
      * **Lokale Festplatten-Garantie:** Lokal unter `data/` verbleiben **ausschließlich `data/raw/` und `data/sample/` (die Ausgangslage)** – 0 lokale Parquet- oder Iceberg-Dateien!
-  4. **Komplette End-to-End Cloud-Orchestrierung via Google Cloud Workflows (`run_workflow.ps1` -> `infra/workflows/pipeline.yaml`):**
-     Der Cloud Workflow `youtube-dataops-pipeline` in Frankfurt (`europe-west3`) steuert **den gesamten Cloud-DWH-Prozess in 8 Schritten vollautomatisch**:
+  4. **Komplette End-to-End Cloud-Orchestrierung via Google Cloud Workflows & BigQuery Stored Procedures (`Pattern B` in `infra/workflows/pipeline.yaml` & `infra/sql/*.sql`):**
+     Anstatt komplexe SQL-Strings unleserlich in der YAML-Datei zu zerstückeln, liegen die SQL-Transformationen sauber formatiert und debuggbar als echte `.sql`-Dateien unter `infra/sql/` und werden von Terraform als **BigQuery Stored Procedures** (`google_bigquery_routine`) ausgerollt. Der Cloud Workflow `youtube-dataops-pipeline` steuert den gesamten Prozess über schlanke `CALL`-Aufrufe:
      * **Step 1 (`load_gcs_silver_to_bq`):** Lädt `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` per `LOAD DATA OVERWRITE` direkt Cloud-to-Cloud nach BigQuery (`silver_videos`).
      * **Step 2 (`check_silver_data`):** Prüft die geladene Datensatzanzahl in `silver_videos`.
-     * **Step 3 (`build_stg_videos`):** Baut den idempotent deduplizierten Staging-View `stg_videos`.
-     * **Step 4 (`build_dim_category`):** Baut die Conformed Dimension `dim_category`.
-     * **Step 5 (`build_dim_date`):** Baut die Kalender-Dimension `dim_date`.
-     * **Step 6 (`build_dim_video_scd2`):** Baut die **SCD-2 Dimension `dim_video`** (inkl. aller 3 historischen Titelversionen von `2kyS6SvSYSE` mit `valid_from`, `valid_to` und `is_current`).
-     * **Step 7 (`refresh_fact_table`):** Baut `fact_video_metrics` mittels Point-in-Time SCD-2 Join.
-     * **Step 8 (`quality_gate_validation` & `evaluate_quality_gate`):** Prüft referenzielle Integrität (`0 orphan records`) und bricht bei Fehlern sofort per `raise` ab.
+     * **Step 3 (`build_stg_videos`):** Ruft `CALL youtube_analytics.sp_build_stg_videos();` (`infra/sql/01_sp_build_stg_videos.sql`) auf.
+     * **Step 4 (`build_dimensions_scd2`):** Ruft `CALL youtube_analytics.sp_build_dimensions();` (`infra/sql/02_sp_build_dimensions.sql`) auf und baut `dim_category`, `dim_date` und die **SCD-2 Dimension `dim_video`** (inkl. aller 3 historischen Titelversionen von `2kyS6SvSYSE`).
+     * **Step 5 (`refresh_fact_table`):** Ruft `CALL youtube_analytics.sp_refresh_fact_table();` (`infra/sql/03_sp_refresh_fact_table.sql`) auf und baut `fact_video_metrics` mittels Point-in-Time SCD-2 Join.
+     * **Step 6 (`quality_gate_validation` & `evaluate_quality_gate`):** Prüft referenzielle Integrität (`0 orphan records`) und bricht bei Fehlern sofort per `raise` ab.
   5. **Cloud-Native Observability via Grafana Cloud & CI/CD:** Grafana Cloud fragt über das native Google Cloud Monitoring Plugin (`stackdriver`) direkt Workflow-Durchsatz, p99-Latenz, gescannte BigQuery-Bytes und die Pub/Sub-Nachrichtenströme ab. GitHub Actions validiert jeden Push automatisch.
 * **Was in `v2.1.0` abgelöst / VOLLSTÄNDIG OPTIONAL ist:**
   * 🔴 **Lokale Parquet- & Iceberg-Ordner (`data/bronze`, `data/quarantine`, `data/silver`, `data/iceberg_warehouse`, `data/gold`):** **KOMPLETT IN DEN GCS-BUCKET (`gs://lakehouse-youtube-cloudanalytics-514018/`) VERLAGERT!** Lokal existieren nur noch `data/raw/` und `data/sample/`.
@@ -108,7 +106,7 @@ v1.0.0 (Local Docker Foundation)     v2.0.0 (Hybrid Lakehouse & Kimball)      v2
 | **Quality Gates** | 🟡 Nur einfacher Rowcount | 🟢 **15 automatisierte dbt Tests** | 🟢 **In-Workflow Orphan Gate + 15 dbt Tests** |
 | **Orchestrierung** | 🟢 Lokaler Airflow 2.9 (`start_airflow.ps1`) | 🟡 PowerShell CLI | 🟢 **Full End-to-End Google Cloud Workflows** (`run_workflow.ps1` / `run_pipeline.ps1`)<br/>🔴 *Obsolet:* Lokaler Airflow Stack |
 | **Observability** | 🟢 Lokaler Prometheus/Grafana Container | 🟡 Lokaler Prometheus/Grafana Container | 🟢 **Grafana Cloud via GCP Monitoring (Weg 1)**<br/>🔴 *Obsolet:* Lokaler Monitoring-Container-Stack |
-| **Cloud IaC & CI/CD** | 🔴 Nicht vorhanden | 🔴 Manuelles Dataset / Kein IaC | 🟢 **Terraform 1.17** (`run_infra.ps1`: 7 GCP-Ressourcen) & **GitHub Actions** |
+| **Cloud IaC & CI/CD** | 🔴 Nicht vorhanden | 🔴 Manuelles Dataset / Kein IaC | 🟢 **Terraform 1.17** (`run_infra.ps1`: 10 GCP-Ressourcen inkl. 3 Stored Procedures) & **GitHub Actions** |
 
 ---
 
@@ -243,16 +241,16 @@ pip install -r requirements.txt
 
 ---
 
-### Schritt 2: Cloud-Infrastruktur (7 GCP-Ressourcen) per Terraform bereitstellen (Dauer: 30 Sekunden)
+### Schritt 2: Cloud-Infrastruktur (10 GCP-Ressourcen inkl. Stored Procedures) per Terraform bereitstellen (Dauer: 30 Sekunden)
 
-Terraform rollt deklarativ den GCS Bucket (`lakehouse-youtube-cloudanalytics-514018`), das BigQuery-Dataset (`youtube_analytics`), die 2 Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), die 2 Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`) und den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`) aus:
+Terraform rollt deklarativ den GCS Bucket (`lakehouse-youtube-cloudanalytics-514018`), das BigQuery-Dataset (`youtube_analytics`), die 2 Pub/Sub Topics (`topic-youtube-ingest`, `topic-youtube-dlq`), die 2 Pub/Sub Subscriptions (`sub-youtube-ingest`, `sub-youtube-dlq`), die **3 BigQuery Stored Procedures (`sp_build_stg_videos`, `sp_build_dimensions`, `sp_refresh_fact_table` aus `infra/sql/*.sql`)** und den End-to-End Serverless Cloud Workflow (`youtube-dataops-pipeline`) aus:
 
 ```powershell
 .\run_infra.ps1 init
 .\run_infra.ps1 plan
 .\run_infra.ps1 apply
 ```
-*Ergebnis:* `Apply complete! Resources: 7 added, 0 changed, 0 destroyed.`
+*Ergebnis:* `Apply complete! Resources: 10 added, 0 changed, 0 destroyed.`
 
 ---
 
@@ -290,21 +288,19 @@ Sobald Terraform ausgerollt ist, kannst du die **gesamte End-to-End Cloud Pipeli
 * Liest die Bronze-Parquets direkt aus `gs://lakehouse-youtube-cloudanalytics-514018/bronze/`, führt die Typisierung und das Kategorie-Mapping gegen `data/raw/US_category_id.json` aus und schreibt sowohl **`gs://.../silver/silver_videos.parquet`** als auch das **Apache Iceberg V2 Warehouse (`gs://.../iceberg_warehouse/silver/videos/`)** direkt in den Cloud-Bucket.
 * **Lokale Sauberkeits-Garantie:** Lokal unter `data/` verbleiben **ausschließlich `data/raw/` und `data/sample/` (die Ausgangslage)**!
 
-#### Schritt 5: Kompletter End-to-End DWH-Aufbau & Quality Gate via Google Cloud Workflows (Frankfurt `europe-west3`)
+#### Schritt 5: Kompletter End-to-End DWH-Aufbau & Quality Gate via Google Cloud Workflows (Pattern B: Stored Procedures)
 
 ```powershell
 .\run_workflow.ps1
 ```
-* Der Cloud Workflow `youtube-dataops-pipeline` steuert **den gesamten DWH-Prozess in 8 Schritten vollautomatisch in der Cloud**:
+* Der Cloud Workflow `youtube-dataops-pipeline` steuert **den gesamten DWH-Prozess über die in `infra/sql/*.sql` definierten BigQuery Stored Procedures vollautomatisch in der Cloud**:
   1. `load_gcs_silver_to_bq`: Lädt `gs://lakehouse-youtube-cloudanalytics-514018/silver/*.parquet` per `LOAD DATA OVERWRITE` direkt nach BigQuery (`silver_videos`).
   2. `check_silver_data`: Prüft die Zeilenanzahl in `silver_videos`.
-  3. `build_stg_videos`: Baut den idempotent deduplizierten Staging-View `stg_videos`.
-  4. `build_dim_category`: Baut die Conformed Dimension `dim_category`.
-  5. `build_dim_date`: Baut die Kalender-Dimension `dim_date`.
-  6. `build_dim_video_scd2`: Baut die **SCD-2 Dimension `dim_video`** (inkl. aller 3 historischen Titelversionen von `2kyS6SvSYSE`).
-  7. `refresh_fact_table`: Baut `fact_video_metrics` mittels Point-in-Time SCD-2 Join.
-  8. `quality_gate_validation`: Prüft referenzielle Integrität (`0 orphan records`) und wirft bei Fehlern `raise`.
-* *Ergebnis:* `{"message":"Full End-to-End Cloud Lakehouse & Star-Schema Pipeline completed successfully (GCS -> Silver -> Staging -> SCD-2 Dims -> Fact -> 0 Quality Errors).","status":"SUCCESS"}`
+  3. `build_stg_videos`: Ruft `CALL youtube_analytics.sp_build_stg_videos();` (`infra/sql/01_sp_build_stg_videos.sql`) auf.
+  4. `build_dimensions_scd2`: Ruft `CALL youtube_analytics.sp_build_dimensions();` (`infra/sql/02_sp_build_dimensions.sql`) auf (`dim_category`, `dim_date`, `dim_video` SCD-2 mit allen 3 Versionen von `2kyS6SvSYSE`).
+  5. `refresh_fact_table`: Ruft `CALL youtube_analytics.sp_refresh_fact_table();` (`infra/sql/03_sp_refresh_fact_table.sql`) auf (`fact_video_metrics` mit Point-in-Time SCD-2 Join).
+  6. `quality_gate_validation`: Prüft referenzielle Integrität (`0 orphan records`) und wirft bei Fehlern `raise`.
+* *Ergebnis:* `{"message":"Full End-to-End Cloud Lakehouse & Star-Schema Pipeline (Pattern B: Stored Procedures) completed successfully. 0 quality errors detected.","status":"SUCCESS"}`
 
 #### Schritt 6: Ergänzende Verifikation der 15 dbt Data Tests
 
@@ -418,9 +414,13 @@ DE_Capstone_2026/
 │           ├── fact_video_metrics.sql      # 🟢 [v2.0/v2.1 Active] Interaktions-Fakten mit Point-in-Time Join
 │           └── schema.yml                  # 🟢 [v2.0/v2.1 Active] ⭐ 15 automatisierte dbt Tests (Quality Gate)
 ├── infra/                                  # 🟢 [v2.1 Active] ⭐ Infrastructure as Code (Terraform 1.17)
-│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v2.1 Active] 7 GCP Ressourcen (GCS, BQ, Pub/Sub Topics+Subs, Workflow)
+│   ├── versions.tf, variables.tf, main.tf  # 🟢 [v2.1 Active] 10 GCP Ressourcen (GCS, BQ, Pub/Sub, 3x Stored Proc, Workflow)
+│   ├── sql/                                # 🟢 [v2.1 Active] ⭐ Pattern B: Saubere BigQuery Stored Procedures (.sql)
+│   │   ├── 01_sp_build_stg_videos.sql      # 🟢 [v2.1 Active] Stored Procedure: Idempotenter Staging View
+│   │   ├── 02_sp_build_dimensions.sql      # 🟢 [v2.1 Active] Stored Procedure: dim_category, dim_date & SCD-2 dim_video
+│   │   └── 03_sp_refresh_fact_table.sql    # 🟢 [v2.1 Active] Stored Procedure: fact_video_metrics (Point-in-Time Join)
 │   └── workflows/
-│       └── pipeline.yaml                   # 🟢 [v2.1 Active] ⭐ 8-stufiger End-to-End Cloud Workflow (GCS -> BQ -> Star-Schema -> Gate)
+│       └── pipeline.yaml                   # 🟢 [v2.1 Active] ⭐ End-to-End Cloud Workflow (GCS Load -> CALL SPs -> Quality Gate)
 ├── docker/                                 # Modulare Docker Compose Setups (für v1.0/v2.0 Offline-Modus)
 │   ├── docker-compose-spark.yml            # 🟡 [v2.0 Optional] Lokaler PySpark + Iceberg Container
 │   ├── docker-compose-kafka.yml            # 🟡 [v1.0/v2.0 Optional] Lokales Kafka KRaft
